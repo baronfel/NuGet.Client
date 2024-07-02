@@ -347,7 +347,6 @@ namespace NuGet.Protocol
             if (cacheEntry.CacheFile == null)
             {
                 logger.LogVerbose($"Cache file unavailable: {packageIdentity}");
-                // Log here as well? Cause we're probably not logging the cache here.
                 return false;
             }
 
