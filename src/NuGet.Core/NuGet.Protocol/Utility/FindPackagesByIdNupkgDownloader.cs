@@ -205,7 +205,7 @@ namespace NuGet.Protocol
                 token);
 
             // Process the NupkgEntry
-            return await ProcessCacheEntryAsync(cacheEntry, processStreamAsync, token);
+            return await ProcessCacheEntryAsync(cacheEntry, processStreamAsync, identity, logger, token);
         }
 
         private async Task<CacheEntry> ProcessStreamAndGetCacheEntryAsync(
@@ -224,6 +224,7 @@ namespace NuGet.Protocol
                     if (httpSourceResult == null ||
                         httpSourceResult.Stream == null)
                     {
+                        logger.LogVerbose($"Package stream unavailable for package {identity} from {url} with status {httpSourceResult?.Status}");
                         return new CacheEntry(cacheFile: null, alreadyProcessed: false);
                     }
 
@@ -235,6 +236,7 @@ namespace NuGet.Protocol
                     }
                     else
                     {
+                        logger.LogVerbose($"Processing downloaded stream {identity} from {url}");
                         await processStreamAsync(httpSourceResult.Stream);
 
                         // When the stream came from the network directly, there is not cache file name. This
@@ -263,7 +265,7 @@ namespace NuGet.Protocol
 
                 try
                 {
-                    return await _httpSource.GetAsync(
+                    var result = await _httpSource.GetAsync(
                         new HttpSourceCachedRequest(
                             url,
                             "nupkg_" + identity.Id.ToLowerInvariant() + "." + identity.Version.ToNormalizedString(),
@@ -278,6 +280,7 @@ namespace NuGet.Protocol
                         async httpSourceResult => await processAsync(httpSourceResult),
                         logger,
                         token);
+                    return result;
                 }
                 catch (TaskCanceledException) when (retry < maxRetries)
                 {
@@ -328,18 +331,23 @@ namespace NuGet.Protocol
             return await processAsync(null);
         }
 
-        private async Task<bool> ProcessCacheEntryAsync(
+        private static async Task<bool> ProcessCacheEntryAsync(
             CacheEntry cacheEntry,
             Func<Stream, Task> processStreamAsync,
+            PackageIdentity packageIdentity,
+            ILogger logger,
             CancellationToken token)
         {
             if (cacheEntry.AlreadyProcessed)
             {
+                logger.LogVerbose($"Package stream already processed: {packageIdentity}");
                 return true;
             }
 
             if (cacheEntry.CacheFile == null)
             {
+                logger.LogVerbose($"Cache file unavailable: {packageIdentity}");
+                // Log here as well? Cause we're probably not logging the cache here.
                 return false;
             }
 
@@ -358,7 +366,11 @@ namespace NuGet.Protocol
                 },
                 token))
             {
+                logger.LogVerbose($"Processing the stream: {packageIdentity}");
+
                 await processStreamAsync(cacheStream);
+
+                logger.LogVerbose($"Finished processing the stream: {packageIdentity}");
 
                 return true;
             }
