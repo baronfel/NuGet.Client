@@ -70,11 +70,15 @@ namespace NuGet.Protocol
             ILogger log,
             CancellationToken token)
         {
+            log.LogVerbose($"GetAsync#1 {request.Uri}");
+
             var cacheResult = HttpCacheUtility.InitializeHttpCacheResult(
                 HttpCacheDirectory,
                 _sourceUri,
                 request.CacheKey,
                 request.CacheContext);
+
+            log.LogVerbose($"GetAsync#2 {request.Uri}");
 
             return await ConcurrencyUtilities.ExecuteWithFileLockedAsync(
                 cacheResult.CacheFile,
@@ -98,6 +102,7 @@ namespace NuGet.Protocol
                                 cacheResult.CacheFile,
                                 cacheResult.Stream);
 
+                            log.LogVerbose($"GetAsync-Inner#1 {request.Uri}");
                             return await processAsync(httpSourceResult);
                         }
                         catch (Exception e)
@@ -140,6 +145,7 @@ namespace NuGet.Protocol
                         if (request.IgnoreNotFounds && throttledResponse.Response.StatusCode == HttpStatusCode.NotFound)
                         {
                             var httpSourceResult = new HttpSourceResult(HttpSourceResultStatus.NotFound);
+                            log.LogVerbose($"GetAsync-Inner#2 {request.Uri}");
 
                             return await processAsync(httpSourceResult);
                         }
@@ -148,6 +154,7 @@ namespace NuGet.Protocol
                         {
                             // Ignore reading and caching the empty stream.
                             var httpSourceResult = new HttpSourceResult(HttpSourceResultStatus.NoContent);
+                            log.LogVerbose($"GetAsync-Inner#3 {request.Uri}");
 
                             return await processAsync(httpSourceResult);
                         }
@@ -167,6 +174,8 @@ namespace NuGet.Protocol
                                 cacheResult.CacheFile,
                                 cacheResult.Stream))
                             {
+                                log.LogVerbose($"GetAsync-Inner#4 {request.Uri}");
+
                                 return await processAsync(httpSourceResult);
                             }
                         }
@@ -187,12 +196,14 @@ namespace NuGet.Protocol
                                 cacheFileName: null,
                                 stream: stream))
                             {
+                                log.LogVerbose($"GetAsync-Inner#5 {request.Uri}");
                                 return await processAsync(httpSourceResult);
                             }
                         }
                     }
                 },
                 token: token);
+
         }
 
         public Task<T> ProcessStreamAsync<T>(

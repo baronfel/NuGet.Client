@@ -265,6 +265,7 @@ namespace NuGet.Protocol
 
                 try
                 {
+                    logger.LogVerbose($"Downloading package {identity} from {url}");
                     var result = await _httpSource.GetAsync(
                         new HttpSourceCachedRequest(
                             url,
@@ -280,6 +281,7 @@ namespace NuGet.Protocol
                         async httpSourceResult => await processAsync(httpSourceResult),
                         logger,
                         token);
+                    logger.LogVerbose($"Downloaded package {identity} from {url}. Null Result: {result == null}");
                     return result;
                 }
                 catch (TaskCanceledException) when (retry < maxRetries)
