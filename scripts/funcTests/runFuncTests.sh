@@ -58,7 +58,8 @@ if [ "$MONO_TESTS" == "1" ]; then
     TestDir="$DIR/artifacts/NuGet.CommandLine.Test/"
     VsTestConsole="$DIR/artifacts/NuGet.CommandLine.Test/vstest/vstest.console.exe"
     TestResultsDir="$DIR/build/TestResults"
-    VsTestVerbosity="minimal"
+    VsTestVerbosity="detailed"
+    RunSettings="$DIR/build/xunit.runsettings"
 
     if [ "$SYSTEM_DEBUG" == "true" ]; then
         VsTestVerbosity="detailed"
@@ -68,21 +69,21 @@ if [ "$MONO_TESTS" == "1" ]; then
     rm -rf "$TestDir/System.*" "$TestDir/WindowsBase.dll" "$TestDir/Microsoft.CSharp.dll" "$TestDir/Microsoft.Build.Engine.dll"
 
     case "$(uname -s)" in
-		    Linux)
-			    # We are not testing Mono on linux currently, so comment it out.
-			    #echo "mono $VsTestConsole $TestDir/NuGet.CommandLine.Test.dll --TestCaseFilter:Platform!=Windows&Platform!=Darwin --logger:console;verbosity=$VsTestVerbosity --logger:"trx" --ResultsDirectory:$TestResultsDir"
-			    #mono $VsTestConsole "$TestDir/NuGet.CommandLine.Test.dll" --TestCaseFilter:"Platform!=Windows&Platform!=Darwin" --logger:"console;verbosity=$VsTestVerbosity" --logger:"trx" --ResultsDirectory:"$TestResultsDir"
-			    #EXIT_CODE=$?
-			    ;;
-		    Darwin)
+            Linux)
+                # We are not testing Mono on linux currently, so comment it out.
+                #echo "mono $VsTestConsole $TestDir/NuGet.CommandLine.Test.dll --TestCaseFilter:Platform!=Windows&Platform!=Darwin --logger:console;verbosity=$VsTestVerbosity --logger:"trx" --ResultsDirectory:$TestResultsDir"
+                #mono $VsTestConsole "$TestDir/NuGet.CommandLine.Test.dll" --TestCaseFilter:"Platform!=Windows&Platform!=Darwin" --logger:"console;verbosity=$VsTestVerbosity" --logger:"trx" --ResultsDirectory:"$TestResultsDir"
+                #EXIT_CODE=$?
+                ;;
+            Darwin)
                 echo "==================== Run mono tests started at `date -u +"%Y-%m-%dT%H:%M:%S"` ======================"
-			    echo "mono $VsTestConsole $TestDir/NuGet.CommandLine.Test.dll --TestCaseFilter:Platform!=Windows&Platform!=Linux --logger:console;verbosity=$VsTestVerbosity --logger:"trx" --ResultsDirectory:$TestResultsDir"
-			    mono $VsTestConsole "$TestDir/NuGet.CommandLine.Test.dll" --TestCaseFilter:"Platform!=Windows&Platform!=Linux" --logger:"console;verbosity=$VsTestVerbosity" --logger:"trx" --ResultsDirectory:"$TestResultsDir"
-			    EXIT_CODE=$?
+                set -x
+                mono "$VsTestConsole" "$TestDir/NuGet.CommandLine.Test.dll" --TestCaseFilter:"Platform!=Windows&Platform!=Linux" --logger:"console;verbosity=$VsTestVerbosity" --logger:"trx" --diag:"$BUILD_STAGINGDIRECTORY/binlog/vstest.diag.log" --ResultsDirectory:"$TestResultsDir" -- xUnit.ShadowCopy=true xUnit.InternalDiagnosticMessages=true xUnit.AppDomain=denied xUnit.DiagnosticMessages=true
+                EXIT_CODE=$?
                 echo "================== mono tests finished at `date -u +"%Y-%m-%dT%H:%M:%S"` ==================="
                 echo ""
-			    ;;
-		    *) ;;
+                ;;
+            *) ;;
     esac
 fi
 
