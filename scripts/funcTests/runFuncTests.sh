@@ -78,8 +78,9 @@ if [ "$MONO_TESTS" == "1" ]; then
             Darwin)
                 echo "==================== Run mono tests started at `date -u +"%Y-%m-%dT%H:%M:%S"` ======================"
                 set -x
-                mono $VsTestConsole $TestDir/NuGet.CommandLine.Test.dll --TestCaseFilter:Platform!=Windows&Platform!=Linux --logger:console;verbosity=$VsTestVerbosity --logger:trx --diag:$BUILD_STAGINGDIRECTORY/binlog/vstest.diag.log --ResultsDirectory:$TestResultsDir -- xUnit.ShadowCopy=true xUnit.InternalDiagnosticMessages=true xUnit.AppDomain=denied xUnit.DiagnosticMessages=true xUnit.ParallelizeAssembly=true xUnit.ParallelizeTestCollections=true xUnit.LongRunningTestSeconds=120
+                mono $VsTestConsole $TestDir/NuGet.CommandLine.Test.dll --logger:"console;verbosity=$VsTestVerbosity" --logger:trx --diag:$BUILD_STAGINGDIRECTORY/binlog/vstest.diag.log --ResultsDirectory:$TestResultsDir -- xUnit.ShadowCopy=true xUnit.InternalDiagnosticMessages=true xUnit.AppDomain=denied xUnit.DiagnosticMessages=true xUnit.ParallelizeAssembly=true xUnit.ParallelizeTestCollections=true xUnit.LongRunningTestSeconds=120
                 EXIT_CODE=$?
+                set +x
                 echo "================== mono tests finished at `date -u +"%Y-%m-%dT%H:%M:%S"` ==================="
                 echo ""
                 ;;

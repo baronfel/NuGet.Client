@@ -30,7 +30,7 @@
   <ItemGroup>
     <Compile Remove="compiler\resources\*" />
     <EmbeddedResource Include="compiler\resources\*" />
-    <Content Include="$(PkgMicrosoft_TestPlatform_Portable)\tools\net451\**"
+    <Content Include="$(PkgMicrosoft_TestPlatform_Portable)\tools\net462\**"
              TargetPath="vstest\%(RecursiveDir)%(Filename)%(Extension)"
              DestinationSubDirectory="vstest\"
              CopyToOutputDirectory="PreserveNewest"
