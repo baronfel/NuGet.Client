@@ -357,11 +357,6 @@ namespace NuGet.Client
         public class ManagedCodePatterns
         {
             /// <summary>
-            /// Pattern used to locate all files targetted at a specific runtime and/or framework
-            /// </summary>
-            public PatternSet AnyTargettedFile { get; }
-
-            /// <summary>
             /// Pattern used to locate all files designed for loading as managed code assemblies at run-time
             /// </summary>
             public PatternSet RuntimeAssemblies { get; }
@@ -418,19 +413,6 @@ namespace NuGet.Client
 
             internal ManagedCodePatterns(ManagedCodeConventions conventions)
             {
-                AnyTargettedFile = new PatternSet(
-                    conventions.Properties,
-                    groupPatterns: new PatternDefinition[]
-                    {
-                        new PatternDefinition("{any}/{tfm}/{any?}", table: DotnetAnyTable),
-                        new PatternDefinition("runtimes/{rid}/{any}/{tfm}/{any?}", table: DotnetAnyTable),
-                    },
-                    pathPatterns: new PatternDefinition[]
-                    {
-                        new PatternDefinition("{any}/{tfm}/{any?}", table: DotnetAnyTable),
-                        new PatternDefinition("runtimes/{rid}/{any}/{tfm}/{any?}", table: DotnetAnyTable),
-                    });
-
                 RuntimeAssemblies = new PatternSet(
                     conventions.Properties,
                     groupPatterns: new PatternDefinition[]

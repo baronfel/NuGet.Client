@@ -237,7 +237,7 @@ namespace NuGet.ContentModel
 
         private List<ContentItem> FindItemsImplementation(PatternSet definition, IEnumerable<Asset> assets)
         {
-            var pathPatterns = definition.PathExpressions;
+            var pathPatterns = definition.PathExpressions; // Do I really need the group thing? Why not do them immediately?
 
             List<ContentItem> items = new();
 
