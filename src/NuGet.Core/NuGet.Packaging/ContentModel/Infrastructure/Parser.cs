@@ -190,7 +190,7 @@ namespace NuGet.ContentModel.Infrastructure
                     {
                         break;
                     }
-                    var substring = path.Substring(startIndex, delimiterIndex - startIndex);
+                    var substring = path.Substring(startIndex, delimiterIndex - startIndex); // TODO NK - Check the substring here.
                     object value;
                     if (propertyDefinition.TryLookup(substring, _table, out value))
                     {

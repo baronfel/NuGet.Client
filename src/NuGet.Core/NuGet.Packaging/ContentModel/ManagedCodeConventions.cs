@@ -22,7 +22,7 @@ namespace NuGet.Client
 
         private static readonly ContentPropertyDefinition AnyProperty = new ContentPropertyDefinition(
             PropertyNames.AnyValue,
-            parser: (o, t) => o); // Identity parser, all strings are valid for any
+            parser: (o, t) => o); // Identity parser, all strings are valid for any -> For a well authored package, every substring will get actualized
         private static readonly ContentPropertyDefinition AssemblyProperty = new ContentPropertyDefinition(PropertyNames.ManagedAssembly,
             parser: AllowEmptyFolderParser,
             fileExtensions: new[] { ".dll", ".winmd", ".exe" });
@@ -417,7 +417,7 @@ namespace NuGet.Client
                     conventions.Properties,
                     groupPatterns: new PatternDefinition[]
                     {
-                        new PatternDefinition("runtimes/{rid}/lib/{tfm}/{any?}", table: DotnetAnyTable),
+                        new PatternDefinition("runtimes/{rid}/lib/{tfm}/{any?}", table: DotnetAnyTable), // These can be static. 
                         new PatternDefinition("lib/{tfm}/{any?}", table: DotnetAnyTable),
                         new PatternDefinition("lib/{assembly?}", table: DotnetAnyTable, defaults: NetTFMTable)
                     },
