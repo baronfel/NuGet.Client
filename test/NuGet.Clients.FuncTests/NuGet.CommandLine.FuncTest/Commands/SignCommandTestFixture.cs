@@ -371,7 +371,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
             var testServer = await _testServer.Value;
             var rootCa = CertificateAuthority.Create(testServer.Url);
             var intermediateCa = rootCa.CreateIntermediateCertificateAuthority();
-            var rootCertificate = new X509Certificate2(rootCa.Certificate.GetEncoded());
+            var rootCertificate = new X509Certificate2(rootCa.Certificate);
 
             _trustedTimestampRoot = TrustedTestCert.Create(
                 rootCertificate,

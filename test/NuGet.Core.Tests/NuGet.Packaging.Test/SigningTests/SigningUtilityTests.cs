@@ -389,7 +389,7 @@ namespace NuGet.Packaging.Test
                         break;
 
                     case Oids.SigningCertificateV2:
-                        var signingCertificateV2 = SigningCertificateV2.Read(attribute.Values[0].RawData);
+                        var signingCertificateV2 = Signing.SigningCertificateV2.Read(attribute.Values[0].RawData);
 
                         Assert.Equal(1, signingCertificateV2.Certificates.Count);
 

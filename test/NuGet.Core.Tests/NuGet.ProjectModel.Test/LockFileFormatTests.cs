@@ -532,15 +532,15 @@ namespace NuGet.ProjectModel.Test
         ""type"": ""project"",
         ""framework"": "".NETCoreApp,Version=v6.0""
       },
-      ""Microsoft.Extensions.ApiDescription.Server/3.0.0"": {
+      ""Microsoft.CrlEntryExtensions.ApiDescription.Server/3.0.0"": {
         ""type"": ""package"",
          ""build"": {
-          ""build/Microsoft.Extensions.ApiDescription.Server.props"": {},
-          ""build/Microsoft.Extensions.ApiDescription.Server.targets"": {}
+          ""build/Microsoft.CrlEntryExtensions.ApiDescription.Server.props"": {},
+          ""build/Microsoft.CrlEntryExtensions.ApiDescription.Server.targets"": {}
         },
         ""buildMultiTargeting"": {
-          ""buildMultiTargeting/Microsoft.Extensions.ApiDescription.Server.props"": {},
-          ""buildMultiTargeting/Microsoft.Extensions.ApiDescription.Server.targets"": {}
+          ""buildMultiTargeting/Microsoft.CrlEntryExtensions.ApiDescription.Server.props"": {},
+          ""buildMultiTargeting/Microsoft.CrlEntryExtensions.ApiDescription.Server.targets"": {}
         }        
       },
        ""runtime.debian.8-x64.runtime.native.System.Security.Cryptography.OpenSsl/4.3.0"": {
@@ -622,18 +622,18 @@ namespace NuGet.ProjectModel.Test
                             },
                             new()
                             {
-                                Name = "Microsoft.Extensions.ApiDescription.Server",
+                                Name = "Microsoft.CrlEntryExtensions.ApiDescription.Server",
                                 Version = NuGetVersion.Parse("3.0.0"),
                                 Type = "package",
                                 Build = new List<LockFileItem>
                                 {
-                                    new("build/Microsoft.Extensions.ApiDescription.Server.props"),
-                                    new("build/Microsoft.Extensions.ApiDescription.Server.targets"),
+                                    new("build/Microsoft.CrlEntryExtensions.ApiDescription.Server.props"),
+                                    new("build/Microsoft.CrlEntryExtensions.ApiDescription.Server.targets"),
                                 },
                                 BuildMultiTargeting = new List<LockFileItem>()
                                 {
-                                    new("buildMultiTargeting/Microsoft.Extensions.ApiDescription.Server.props"),
-                                    new("buildMultiTargeting/Microsoft.Extensions.ApiDescription.Server.targets")
+                                    new("buildMultiTargeting/Microsoft.CrlEntryExtensions.ApiDescription.Server.props"),
+                                    new("buildMultiTargeting/Microsoft.CrlEntryExtensions.ApiDescription.Server.targets")
                                 }
                             },
                             new()

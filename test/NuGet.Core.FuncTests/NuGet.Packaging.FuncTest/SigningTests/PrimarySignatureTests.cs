@@ -15,8 +15,6 @@ using FluentAssertions;
 using NuGet.Common;
 using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
-using Org.BouncyCastle.Cms;
-using Org.BouncyCastle.X509.Store;
 using Test.Utility.Signing;
 using Xunit;
 
@@ -96,38 +94,20 @@ namespace NuGet.Packaging.FuncTest
         {
             var packageContext = new SimpleTestPackageContext();
 
-            using (var directory = TestDirectory.Create())
+            using (TestDirectory directory = TestDirectory.Create())
             using (var certificate = new X509Certificate2(_trustedTestCert.Source.Cert))
             {
-                var packageFilePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
+                string packageFilePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
                     certificate,
                     packageContext,
                     directory);
 
-                var signatureFileBytes = ReadSignatureFile(packageFilePath);
-                var signedCms = new SignedCms();
+                byte[] signatureFileBytes = ReadSignatureFile(packageFilePath);
+                TestSignedCms testSignedCms = TestSignedCms.Decode(signatureFileBytes);
 
-                signedCms.Decode(signatureFileBytes);
+                testSignedCms.Certificates.Clear();
 
-                var certificateStore = X509StoreFactory.Create(
-                    "Certificate/Collection",
-                    new X509CollectionStoreParameters(Array.Empty<Org.BouncyCastle.X509.X509Certificate>()));
-                var crlStore = X509StoreFactory.Create(
-                    "CRL/Collection",
-                    new X509CollectionStoreParameters(Array.Empty<Org.BouncyCastle.X509.X509Crl>()));
-
-                using (var readStream = new MemoryStream(signedCms.Encode()))
-                using (var writeStream = new MemoryStream())
-                {
-                    CmsSignedDataParser.ReplaceCertificatesAndCrls(
-                        readStream,
-                        certificateStore,
-                        crlStore,
-                        certificateStore,
-                        writeStream);
-
-                    signedCms.Decode(writeStream.ToArray());
-                }
+                SignedCms signedCms = testSignedCms.Encode();
 
                 Assert.Empty(signedCms.Certificates);
 
@@ -139,6 +119,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
+#if NET
         [CIOnlyFact]
         public async Task Load_WithReissuedSigningCertificate_ThrowsAsync()
         {
@@ -156,39 +137,23 @@ namespace NuGet.Packaging.FuncTest
 
                 using (var packageReader = new PackageArchiveReader(packageFilePath))
                 {
-                    var signature = (await packageReader.GetPrimarySignatureAsync(CancellationToken.None));
+                    PrimarySignature signature = (await packageReader.GetPrimarySignatureAsync(CancellationToken.None));
+                    TestSignedCms testSignedCms = TestSignedCms.Decode(signature.SignedCms.Encode());
 
-                    var certificateStore = X509StoreFactory.Create(
-                        "Certificate/Collection",
-                        new X509CollectionStoreParameters(
-                            new[] { Org.BouncyCastle.Security.DotNetUtilities.FromX509Certificate(certificate2) }));
-                    var emptyCertificateStore = X509StoreFactory.Create(
-                        "Certificate/Collection",
-                        new X509CollectionStoreParameters(Array.Empty<Org.BouncyCastle.X509.X509Certificate>()));
-                    var crlStore = X509StoreFactory.Create(
-                        "CRL/Collection",
-                        new X509CollectionStoreParameters(Array.Empty<Org.BouncyCastle.X509.X509Crl>()));
-                    var bytes = signature.SignedCms.Encode();
+                    testSignedCms.Certificates.Clear();
+                    testSignedCms.Certificates.Add(certificate2);
 
-                    using (var readStream = new MemoryStream(bytes))
-                    using (var writeStream = new MemoryStream())
-                    {
-                        CmsSignedDataParser.ReplaceCertificatesAndCrls(
-                            readStream,
-                            certificateStore,
-                            crlStore,
-                            emptyCertificateStore,
-                            writeStream);
+                    SignedCms signedCms = testSignedCms.Encode();
 
-                        var exception = Assert.Throws<SignatureException>(
-                            () => PrimarySignature.Load(writeStream.ToArray()));
+                    SignatureException exception = Assert.Throws<SignatureException>(
+                        () => PrimarySignature.Load(signedCms.Encode()));
 
-                        Assert.Equal(NuGetLogCode.NU3011, exception.Code);
-                        Assert.Equal("A certificate referenced by the signing-certificate-v2 attribute could not be found.", exception.Message);
-                    }
+                    Assert.Equal(NuGetLogCode.NU3011, exception.Code);
+                    Assert.Equal("A certificate referenced by the signing-certificate-v2 attribute could not be found.", exception.Message);
                 }
             }
         }
+#endif
 
         private static byte[] ReadSignatureFile(string packageFilePath)
         {

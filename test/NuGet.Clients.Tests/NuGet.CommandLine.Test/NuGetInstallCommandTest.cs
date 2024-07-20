@@ -1738,7 +1738,7 @@ namespace NuGet.CommandLine.Test
             {
                 // Arrange
                 var packageA = new SimpleTestPackageContext("a", "1.0.0");
-                packageA.AddFile(@"content/2.5.6/core/store/x64/netcoreapp2.0/microsoft.extensions.configuration.environmentvariables/2.0.0/lib/netstandard2.0/Microsoft.Extensions.Configuration.EnvironmentVariables.dll ");
+                packageA.AddFile(@"content/2.5.6/core/store/x64/netcoreapp2.0/microsoft.extensions.configuration.environmentvariables/2.0.0/lib/netstandard2.0/Microsoft.CrlEntryExtensions.Configuration.EnvironmentVariables.dll ");
 
                 await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, packageA);
 

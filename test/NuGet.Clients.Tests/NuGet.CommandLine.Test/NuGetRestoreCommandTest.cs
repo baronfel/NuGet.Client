@@ -2333,7 +2333,7 @@ EndProject";
                     "1.0.0",
                     repositoryPath,
                     new List<NuGetFramework> { NuGetFramework.Parse("net45") },
-                    @"2.5.6/core/store/x64/netcoreapp2.0/microsoft.extensions.configuration.environmentvariables/2.0.0/lib/netstandard2.0/Microsoft.Extensions.Configuration.EnvironmentVariables.dll"
+                    @"2.5.6/core/store/x64/netcoreapp2.0/microsoft.extensions.configuration.environmentvariables/2.0.0/lib/netstandard2.0/Microsoft.CrlEntryExtensions.Configuration.EnvironmentVariables.dll"
                     );
                 Util.CreateFile(pathContext.WorkingDirectory, "packages.config",
 @"<packages>
@@ -2435,7 +2435,7 @@ EndProject";
                 Util.CreateTestPackage("测试更新包", "1.0.0", publicRepositoryPath);
                 Util.CreateTestPackage("Microsoft.AspNet.Mvc", "5.2.7", publicRepositoryPath);
                 Util.CreateTestPackage("Microsoft.AspNet.WebApi.Cors", "5.2.7", publicRepositoryPath);
-                Util.CreateTestPackage("Microsoft.Extensions.Configuration.Abstractions", "5.0.0", publicRepositoryPath);
+                Util.CreateTestPackage("Microsoft.CrlEntryExtensions.Configuration.Abstractions", "5.0.0", publicRepositoryPath);
                 Util.CreateTestPackage("Moq", "4.16.1", publicRepositoryPath);
                 Util.CreateTestPackage("Moq.AutoMock", "2.3.0", publicRepositoryPath);
                 Util.CreateTestPackage("NerdBank.Algorithms", "1.0.0", publicRepositoryPath);
@@ -2445,7 +2445,7 @@ EndProject";
                 Util.CreateTestPackage("System.Numerics.Vectors", "4.5.0", publicRepositoryPath);
                 Util.CreateTestPackage("System.Runtime.CompilerServices.Unsafe", "6.0.0-preview.1.21102.12", publicRepositoryPath);
                 Util.CreateTestPackage("System.Runtime.InteropServices.RuntimeInformation", "4.0.0", publicRepositoryPath);
-                Util.CreateTestPackage("System.Threading.Tasks.Extensions", "4.5.4", publicRepositoryPath);
+                Util.CreateTestPackage("System.Threading.Tasks.CrlEntryExtensions", "4.5.4", publicRepositoryPath);
                 Util.CreateTestPackage("xunit", "2.0.0", publicRepositoryPath);
                 Util.CreateTestPackage("xunit.abstractions", "2.0.0", publicRepositoryPath);
                 Util.CreateTestPackage("xunit.assert", "2.0.0", publicRepositoryPath);
@@ -2454,10 +2454,10 @@ EndProject";
                 var sharedRepository = Path.Combine(workingPath, "SharedRepository");
                 Directory.CreateDirectory(sharedRepository);
                 Util.CreateTestPackage("Castle.Core", "4.4.0", sharedRepository);
-                Util.CreateTestPackage("Microsoft.Extensions.Configuration", "5.0.0", sharedRepository);
-                Util.CreateTestPackage("Microsoft.Extensions.DependencyInjection.Abstractions", "5.0.0", sharedRepository);
-                Util.CreateTestPackage("Microsoft.Extensions.Logging", "5.0.0", sharedRepository);
-                Util.CreateTestPackage("Microsoft.Extensions.Primitives", "5.0.0", sharedRepository);
+                Util.CreateTestPackage("Microsoft.CrlEntryExtensions.Configuration", "5.0.0", sharedRepository);
+                Util.CreateTestPackage("Microsoft.CrlEntryExtensions.DependencyInjection.Abstractions", "5.0.0", sharedRepository);
+                Util.CreateTestPackage("Microsoft.CrlEntryExtensions.Logging", "5.0.0", sharedRepository);
+                Util.CreateTestPackage("Microsoft.CrlEntryExtensions.Primitives", "5.0.0", sharedRepository);
                 Util.CreateTestPackage("xunit.extensibility.core", "2.0.0", sharedRepository);
                 // Name squatting package on shared repo.
                 Util.CreateTestPackage("TestPackage.AuthorSigned", "1.0.0", publicRepositoryPath);
@@ -2472,11 +2472,11 @@ EndProject";
 @"<packages>
   <package id=""测试更新包"" version=""1.0.0"" targetFramework=""net48"" />
   <package id=""Castle.Core"" version=""4.4.0"" targetFramework=""net48"" />
-  <package id=""Microsoft.Extensions.Primitives"" version=""5.0.0"" targetFramework=""net48"" />
-  <package id=""Microsoft.Extensions.DependencyInjection.Abstractions"" version=""5.0.0"" targetFramework=""net48"" />
-  <package id=""Microsoft.Extensions.Configuration"" version=""5.0.0"" targetFramework=""net48"" />
-  <package id=""Microsoft.Extensions.Configuration.Abstractions"" version=""5.0.0"" targetFramework=""net48"" />
-  <package id=""Microsoft.Extensions.Logging"" version=""5.0.0"" targetFramework=""net48"" />
+  <package id=""Microsoft.CrlEntryExtensions.Primitives"" version=""5.0.0"" targetFramework=""net48"" />
+  <package id=""Microsoft.CrlEntryExtensions.DependencyInjection.Abstractions"" version=""5.0.0"" targetFramework=""net48"" />
+  <package id=""Microsoft.CrlEntryExtensions.Configuration"" version=""5.0.0"" targetFramework=""net48"" />
+  <package id=""Microsoft.CrlEntryExtensions.Configuration.Abstractions"" version=""5.0.0"" targetFramework=""net48"" />
+  <package id=""Microsoft.CrlEntryExtensions.Logging"" version=""5.0.0"" targetFramework=""net48"" />
   <package id=""Moq"" version=""4.16.1"" targetFramework=""net48"" />
   <package id=""Moq.AutoMock"" version=""2.3.0"" targetFramework=""net47"" />
   <package id=""Nerdbank.GitVersioning"" version=""1.1.64"" targetFramework=""net48"" developmentDependency=""true"" />
@@ -2487,7 +2487,7 @@ EndProject";
   <package id=""System.Numerics.Vectors"" version=""4.5.0"" targetFramework=""net48"" />
   <package id=""System.Runtime.CompilerServices.Unsafe"" version=""6.0.0-preview.1.21102.12"" targetFramework=""net48"" />
   <package id=""System.Runtime.InteropServices.RuntimeInformation"" version=""4.0.0"" targetFramework=""net48"" />
-  <package id=""System.Threading.Tasks.Extensions"" version=""4.5.4"" targetFramework=""net48"" />
+  <package id=""System.Threading.Tasks.CrlEntryExtensions"" version=""4.5.4"" targetFramework=""net48"" />
   <package id=""xunit"" version=""2.0.0"" targetFramework=""net472"" />
   <package id=""xunit.abstractions"" version=""2.0.0"" targetFramework=""net472"" />
   <package id=""xunit.assert"" version=""2.0.0"" targetFramework=""net472"" />
@@ -2512,7 +2512,7 @@ EndProject";
             <package pattern=""Nerdbank.*"" />
             <package pattern=""Microsoft.Asp.*"" />
             <package pattern=""Microsoft.AspNet.*"" />
-            <package pattern=""Microsoft.Extensions.Configuration.*"" />
+            <package pattern=""Microsoft.CrlEntryExtensions.Configuration.*"" />
             <package pattern=""System.*"" />
             <package pattern=""xunit*"" />
             <package pattern=""测试更新包"" />
@@ -2520,8 +2520,8 @@ EndProject";
         <packageSource key=""SharedRepository"">
             <package pattern=""Castle.Cor*"" />
             <package pattern=""Moq*"" />
-            <package pattern=""Microsoft.Extensions.*"" />
-            <package pattern=""Microsoft.Extensions.Logging"" />
+            <package pattern=""Microsoft.CrlEntryExtensions.*"" />
+            <package pattern=""Microsoft.CrlEntryExtensions.Logging"" />
             <package pattern=""Nerd*"" />
             <package pattern=""Test*"" />
             <package pattern=""xunit.extensibility.core"" />

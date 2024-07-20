@@ -247,7 +247,7 @@ namespace NuGet.Test.Utility
             using (var zip = new ZipArchive(File.Create(file), ZipArchiveMode.Create))
             {
                 zip.AddEntry("lib/net45/a.dll", ZeroContent);
-                zip.AddEntry("content/2.5.6/core/store/x64/netcoreapp2.0/microsoft.extensions.configuration.environmentvariables/2.0.0/lib/netstandard2.0/Microsoft.Extensions.Configuration.EnvironmentVariables.dll ", ZeroContent);
+                zip.AddEntry("content/2.5.6/core/store/x64/netcoreapp2.0/microsoft.extensions.configuration.environmentvariables/2.0.0/lib/netstandard2.0/Microsoft.CrlEntryExtensions.Configuration.EnvironmentVariables.dll ", ZeroContent);
 
                 zip.AddEntry("Aa.nuspec", @"<?xml version=""1.0"" encoding=""utf-8""?>
                             <package xmlns=""http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd"">

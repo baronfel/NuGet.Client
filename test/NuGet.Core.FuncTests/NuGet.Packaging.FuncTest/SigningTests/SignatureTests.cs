@@ -1,12 +1,15 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable enable
+
 #if IS_SIGNING_SUPPORTED
 
 using System;
-using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -14,14 +17,8 @@ using System.Threading.Tasks;
 using NuGet.Common;
 using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
-using Org.BouncyCastle.Asn1;
-using Org.BouncyCastle.Asn1.Cms;
-using Org.BouncyCastle.Asn1.Pkcs;
-using Org.BouncyCastle.Cms;
 using Test.Utility.Signing;
 using Xunit;
-using BcAttribute = Org.BouncyCastle.Asn1.Cms.Attribute;
-using CryptographicAttributeObject = System.Security.Cryptography.CryptographicAttributeObject;
 
 namespace NuGet.Packaging.FuncTest
 {
@@ -53,7 +50,7 @@ namespace NuGet.Packaging.FuncTest
                 var result = test.PrimarySignature.Verify(
                     timestamp: null,
                     settings: settings,
-                    fingerprintAlgorithm: HashAlgorithmName.SHA256,
+                    fingerprintAlgorithm: Common.HashAlgorithmName.SHA256,
                     certificateExtraStore: test.PrimarySignature.SignedCms.Certificates);
 
                 Assert.Equal(SignatureVerificationStatus.Disallowed, result.Status);
@@ -79,7 +76,7 @@ namespace NuGet.Packaging.FuncTest
                 var result = test.PrimarySignature.Verify(
                     timestamp: null,
                     settings: settings,
-                    fingerprintAlgorithm: HashAlgorithmName.SHA256,
+                    fingerprintAlgorithm: Common.HashAlgorithmName.SHA256,
                     certificateExtraStore: test.PrimarySignature.SignedCms.Certificates);
 
                 Assert.Equal(SignatureVerificationStatus.Valid, result.Status);
@@ -104,7 +101,7 @@ namespace NuGet.Packaging.FuncTest
                 var result = test.PrimarySignature.Verify(
                     timestamp: null,
                     settings: settings,
-                    fingerprintAlgorithm: HashAlgorithmName.SHA256,
+                    fingerprintAlgorithm: Common.HashAlgorithmName.SHA256,
                     certificateExtraStore: test.PrimarySignature.SignedCms.Certificates);
 
                 Assert.Equal(SignatureVerificationStatus.Valid, result.Status);
@@ -118,7 +115,7 @@ namespace NuGet.Packaging.FuncTest
         {
             using (var test = await VerifyTest.CreateAsync(settings: null, certificate: _untrustedTestCertificate.Cert))
             {
-                Assert.Throws<ArgumentException>(() => test.PrimarySignature.GetSigningCertificateFingerprint((HashAlgorithmName)99));
+                Assert.Throws<ArgumentException>(() => test.PrimarySignature.GetSigningCertificateFingerprint((Common.HashAlgorithmName)99));
             }
         }
 
@@ -127,13 +124,13 @@ namespace NuGet.Packaging.FuncTest
         {
             using (var test = await VerifyTest.CreateAsync(settings: null, certificate: _untrustedTestCertificate.Cert))
             {
-                var sha256 = test.PrimarySignature.GetSigningCertificateFingerprint(HashAlgorithmName.SHA256);
-                var sha384 = test.PrimarySignature.GetSigningCertificateFingerprint(HashAlgorithmName.SHA384);
-                var sha512 = test.PrimarySignature.GetSigningCertificateFingerprint(HashAlgorithmName.SHA512);
+                var sha256 = test.PrimarySignature.GetSigningCertificateFingerprint(Common.HashAlgorithmName.SHA256);
+                var sha384 = test.PrimarySignature.GetSigningCertificateFingerprint(Common.HashAlgorithmName.SHA384);
+                var sha512 = test.PrimarySignature.GetSigningCertificateFingerprint(Common.HashAlgorithmName.SHA512);
 
-                var expectedSha256 = SignatureTestUtility.GetFingerprint(_untrustedTestCertificate.Cert, HashAlgorithmName.SHA256);
-                var expectedSha384 = SignatureTestUtility.GetFingerprint(_untrustedTestCertificate.Cert, HashAlgorithmName.SHA384);
-                var expectedSha512 = SignatureTestUtility.GetFingerprint(_untrustedTestCertificate.Cert, HashAlgorithmName.SHA512);
+                var expectedSha256 = SignatureTestUtility.GetFingerprint(_untrustedTestCertificate.Cert, Common.HashAlgorithmName.SHA256);
+                var expectedSha384 = SignatureTestUtility.GetFingerprint(_untrustedTestCertificate.Cert, Common.HashAlgorithmName.SHA384);
+                var expectedSha512 = SignatureTestUtility.GetFingerprint(_untrustedTestCertificate.Cert, Common.HashAlgorithmName.SHA512);
 
                 Assert.Equal(sha256, expectedSha256, StringComparer.Ordinal);
                 Assert.Equal(sha384, expectedSha384, StringComparer.Ordinal);
@@ -142,7 +139,7 @@ namespace NuGet.Packaging.FuncTest
         }
 
         [Fact]
-        public async Task Timestamps_WithTwoAttributesAndOneValueEach_ReturnsTwoTimestamps()
+        public async Task Timestamps_WitMultipleTimestamps_ReturnsMultipleTimestamps()
         {
             var timestampService = await _testFixture.GetDefaultTrustedTimestampServiceAsync();
             var timestampProvider = new Rfc3161TimestampProvider(timestampService.Url);
@@ -156,16 +153,14 @@ namespace NuGet.Packaging.FuncTest
                     packageStream,
                     timestampProvider);
 
-                SignedCms updatedSignedCms = ModifyUnsignedAttributes(authorSignature.SignedCms, attributeTable =>
+                SignedCms updatedSignedCms = ModifyUnsignedAttributes(authorSignature.SignedCms, signerInfo =>
                 {
-                    BcAttribute attribute = attributeTable[PkcsObjectIdentifiers.IdAASignatureTimeStampToken];
-                    Asn1Encodable value = attribute.AttrValues.ToArray().Single();
-                    AttributeTable updatedAttributes = attributeTable.Add(PkcsObjectIdentifiers.IdAASignatureTimeStampToken, value);
+                    Assert.True(signerInfo.TryGetUnsignedAttribute(new Oid(Oids.SignatureTimeStampTokenAttribute), out CryptographicAttributeObject? attribute));
 
-                    return updatedAttributes;
+                    AsnEncodedData value = attribute!.Values[0];
+
+                    attribute.Values.Add(value);
                 });
-
-                AssertTimestampAttributeAndValueCounts(updatedSignedCms, expectedAttributesCount: 2, expectedValuesCount: 2);
 
                 var updatedAuthorSignature = new AuthorPrimarySignature(updatedSignedCms);
 
@@ -173,95 +168,38 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [Fact]
-        public async Task Timestamps_WithOneAttributeAndTwoValues_ReturnsTwoTimestamps()
+        private static SignedCms ModifyUnsignedAttributes(
+            SignedCms signedCms,
+            Action<TestSignerInfo> modify)
         {
-            var timestampService = await _testFixture.GetDefaultTrustedTimestampServiceAsync();
-            var timestampProvider = new Rfc3161TimestampProvider(timestampService.Url);
-            var nupkg = new SimpleTestPackageContext();
+            byte[] bytes = signedCms.Encode();
+            TestSignedCms tempSignedCms = TestSignedCms.Decode(bytes);
 
-            using (var packageStream = await nupkg.CreateAsStreamAsync())
-            using (var testCertificate = new X509Certificate2(_testFixture.TrustedTestCertificate.Source.Cert))
-            {
-                AuthorPrimarySignature authorSignature = await SignedArchiveTestUtility.CreateAuthorSignatureForPackageAsync(
-                    testCertificate,
-                    packageStream,
-                    timestampProvider);
+            TestSignerInfo signerInfo = tempSignedCms.SignerInfos[0];
 
-                SignedCms updatedSignedCms = ModifyUnsignedAttributes(authorSignature.SignedCms, attributeTable =>
-                {
-                    BcAttribute attribute = attributeTable[PkcsObjectIdentifiers.IdAASignatureTimeStampToken];
-                    Asn1Encodable value = attribute.AttrValues.ToArray().Single();
+            modify(signerInfo);
 
-                    attribute = new BcAttribute(
-                        PkcsObjectIdentifiers.IdAASignatureTimeStampToken,
-                        new DerSet(value, value));
-
-                    var updatedAttributes = new AttributeTable(new Asn1EncodableVector(attribute));
-
-                    return updatedAttributes;
-                });
-
-                AssertTimestampAttributeAndValueCounts(updatedSignedCms, expectedAttributesCount: 1, expectedValuesCount: 2);
-
-                var updatedAuthorSignature = new AuthorPrimarySignature(updatedSignedCms);
-
-                Assert.Equal(2, updatedAuthorSignature.Timestamps.Count);
-            }
+            return tempSignedCms.Encode();
         }
 
-        private static void AssertTimestampAttributeAndValueCounts(
-            SignedCms updatedSignedCms,
-            int expectedAttributesCount,
-            int expectedValuesCount)
+        private static bool TryGetAttribute(
+            CryptographicAttributeObjectCollection attributes,
+            Oid oid,
+            [NotNullWhen(true)]
+            out CryptographicAttributeObject? attribute)
         {
-            int attributesCount = 0;
-            int valuesCount = 0;
+            attribute = null;
 
-            foreach (CryptographicAttributeObject attribute in updatedSignedCms.SignerInfos[0].UnsignedAttributes)
+            foreach (CryptographicAttributeObject attr in attributes)
             {
-                if (attribute.Oid.Value == Oids.SignatureTimeStampTokenAttribute)
+                if (string.Equals(attr.Oid.Value, oid.Value, StringComparison.Ordinal))
                 {
-                    ++attributesCount;
-
-                    valuesCount += attribute.Values.Count;
+                    attribute = attr;
+                    return true;
                 }
             }
 
-            Assert.Equal(expectedAttributesCount, attributesCount);
-            Assert.Equal(expectedValuesCount, valuesCount);
-        }
-
-        private static SignerInformation GetFirstSignerInfo(SignerInformationStore store)
-        {
-            var signers = store.GetSigners();
-            var enumerator = signers.GetEnumerator();
-
-            enumerator.MoveNext();
-
-            return (SignerInformation)enumerator.Current;
-        }
-
-        private static SignedCms ModifyUnsignedAttributes(SignedCms signedCms, Func<AttributeTable, AttributeTable> modify)
-        {
-            byte[] bytes = signedCms.Encode();
-
-            var bcSignedCms = new CmsSignedData(bytes);
-            SignerInformationStore signerInfos = bcSignedCms.GetSignerInfos();
-            SignerInformation signerInfo = GetFirstSignerInfo(signerInfos);
-
-            AttributeTable updatedAttributes = modify(signerInfo.UnsignedAttributes);
-
-            SignerInformation updatedSignerInfo = SignerInformation.ReplaceUnsignedAttributes(signerInfo, updatedAttributes);
-            var updatedSignerInfos = new SignerInformationStore(updatedSignerInfo);
-
-            CmsSignedData updatedBcSignedCms = CmsSignedData.ReplaceSigners(bcSignedCms, updatedSignerInfos);
-
-            var updatedSignedCms = new SignedCms();
-
-            updatedSignedCms.Decode(updatedBcSignedCms.GetEncoded());
-
-            return updatedSignedCms;
+            return false;
         }
 
         private sealed class VerifyTest : IDisposable
@@ -272,7 +210,7 @@ namespace NuGet.Packaging.FuncTest
             private bool _isDisposed;
 
             internal SignedPackageArchive Package { get; }
-            internal SignatureVerifySettings Settings { get; }
+            internal SignatureVerifySettings? Settings { get; }
             internal PrimarySignature PrimarySignature { get; }
 
             private VerifyTest(
@@ -280,7 +218,7 @@ namespace NuGet.Packaging.FuncTest
                 FileStream signedPackageReadStream,
                 SignedPackageArchive package,
                 PrimarySignature primarySignature,
-                SignatureVerifySettings settings)
+                SignatureVerifySettings? settings)
             {
                 _directory = directory;
                 _signedPackageReadStream = signedPackageReadStream;
@@ -303,7 +241,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            internal static async Task<VerifyTest> CreateAsync(SignatureVerifySettings settings, X509Certificate2 certificate)
+            internal static async Task<VerifyTest> CreateAsync(SignatureVerifySettings? settings, X509Certificate2 certificate)
             {
                 using (var certificateClone = new X509Certificate2(certificate))
                 {

@@ -2611,9 +2611,9 @@ namespace ClassLibrary
                 var workingDirectory = Path.Combine(testDirectory, projectName);
                 var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
                 Directory.CreateDirectory(Path.Combine(workingDirectory, "Utils"));
-                Directory.CreateDirectory(Path.Combine(workingDirectory, "Extensions"));
+                Directory.CreateDirectory(Path.Combine(workingDirectory, "CrlEntryExtensions"));
                 File.WriteAllText(Path.Combine(workingDirectory, "Utils", "Utility.cs"), utilitySrcFileContent);
-                File.WriteAllText(Path.Combine(workingDirectory, "Extensions", "ExtensionMethods.cs"),
+                File.WriteAllText(Path.Combine(workingDirectory, "CrlEntryExtensions", "ExtensionMethods.cs"),
                     extensionSrcFileContent);
 
                 _dotnetFixture.CreateDotnetNewProject(testDirectory.Path, projectName, " classlib", testOutputHelper: _testOutputHelper);
@@ -2647,7 +2647,7 @@ namespace ClassLibrary
                     Assert.True(srcItems.Length == 4);
                     Assert.Contains("src/ClassLibrary1/ClassLibrary1.csproj", srcItems);
                     Assert.Contains("src/ClassLibrary1/Class1.cs", srcItems);
-                    Assert.Contains("src/ClassLibrary1/Extensions/ExtensionMethods.cs", srcItems);
+                    Assert.Contains("src/ClassLibrary1/CrlEntryExtensions/ExtensionMethods.cs", srcItems);
                     Assert.Contains("src/ClassLibrary1/Utils/Utility.cs", srcItems);
                 }
 
@@ -2664,10 +2664,10 @@ namespace ClassLibrary
                 var projectName = "ClassLibrary1";
                 var workingDirectory = Path.Combine(testDirectory, projectName);
                 var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
-                Directory.CreateDirectory(Path.Combine(workingDirectory, "Extensions", "cs"));
+                Directory.CreateDirectory(Path.Combine(workingDirectory, "CrlEntryExtensions", "cs"));
                 File.WriteAllText(Path.Combine(workingDirectory, "abc.txt"), "hello world");
-                File.WriteAllText(Path.Combine(workingDirectory, "Extensions", "ext.txt"), "hello world again");
-                File.WriteAllText(Path.Combine(workingDirectory, "Extensions", "cs", "ext.cs.txt"), "hello world again");
+                File.WriteAllText(Path.Combine(workingDirectory, "CrlEntryExtensions", "ext.txt"), "hello world again");
+                File.WriteAllText(Path.Combine(workingDirectory, "CrlEntryExtensions", "cs", "ext.cs.txt"), "hello world again");
 
                 _dotnetFixture.CreateDotnetNewProject(testDirectory.Path, projectName, " classlib", testOutputHelper: _testOutputHelper);
 
@@ -2679,10 +2679,10 @@ namespace ClassLibrary
       <TfmSpecificPackageFile Include=""abc.txt"">
         <PackagePath>mycontent/$(TargetFramework)</PackagePath>
       </TfmSpecificPackageFile>
-      <TfmSpecificPackageFile Include=""Extensions/ext.txt"" Condition=""'$(TargetFramework)' == 'net46'"">
+      <TfmSpecificPackageFile Include=""CrlEntryExtensions/ext.txt"" Condition=""'$(TargetFramework)' == 'net46'"">
         <PackagePath>net46content</PackagePath>
       </TfmSpecificPackageFile>
-      <TfmSpecificPackageFile Include=""Extensions/**/ext.cs.txt"" Condition=""'$(TargetFramework)' == 'net46'"">
+      <TfmSpecificPackageFile Include=""CrlEntryExtensions/**/ext.cs.txt"" Condition=""'$(TargetFramework)' == 'net46'"">
         <PackagePath>net46content</PackagePath>
       </TfmSpecificPackageFile>
     </ItemGroup>

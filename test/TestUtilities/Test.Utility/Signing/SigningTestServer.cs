@@ -3,11 +3,15 @@
 
 using System;
 using System.Collections.Concurrent;
+#if IS_SIGNING_SUPPORTED
 using System.Net;
 using System.Threading;
+#endif
 using System.Threading.Tasks;
+#if IS_SIGNING_SUPPORTED
 using NuGet.Common;
 using NuGet.Test.Server;
+#endif
 
 namespace Test.Utility.Signing
 {
