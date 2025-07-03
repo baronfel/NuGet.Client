@@ -3,6 +3,9 @@
 
 using System;
 using System.Collections.Generic;
+#if NET
+using System.Diagnostics.CodeAnalysis;
+#endif
 using System.Linq;
 using System.Reflection;
 using NuGet.Versioning;
@@ -17,6 +20,9 @@ namespace NuGet.Protocol
         private readonly Dictionary<string, string> _stringCache = new Dictionary<string, string>(StringComparer.Ordinal);
         private readonly Dictionary<Type, PropertyInfo[]> _propertyCache = new Dictionary<Type, PropertyInfo[]>();
         private readonly Dictionary<string, NuGetVersion> _versionCache = new Dictionary<string, NuGetVersion>(StringComparer.Ordinal);
+#if NET
+        [DynamicallyAccessedMembersAttribute(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.NonPublicMethods)]
+#endif
         private readonly Type _metadataReferenceCacheType = typeof(MetadataReferenceCache);
 
         /// <summary>
@@ -88,7 +94,11 @@ namespace NuGet.Protocol
         /// <summary>
         /// Iterates through the properties of <paramref name="input"/> that are either <see cref="string"/>s, <see cref="DateTimeOffset"/>s, or <see cref="NuGetVersion"/>s and checks them against the cache.
         /// </summary>
-        public T GetObject<T>(T input)
+        public T GetObject<
+#if NET
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.NonPublicProperties)]
+#endif
+        T>(T input)
         {
             // Get all properties that contain both a Get method and a Set method and can be cached.
             PropertyInfo[] properties;

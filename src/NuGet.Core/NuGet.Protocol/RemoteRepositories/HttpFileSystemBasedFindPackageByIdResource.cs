@@ -579,7 +579,7 @@ namespace NuGet.Protocol
 
         private static async Task<HashSet<NuGetVersion>> ConsumeFlatContainerIndexAsync(Stream stream, string id, string baseUri, CancellationToken token)
         {
-            var json = await JsonSerializer.DeserializeAsync<FlatContainerVersionList>(stream, cancellationToken: token);
+            var json = await JsonSerializer.DeserializeAsync<FlatContainerVersionList>(stream, ProtocolJsonSerializerContext.Default.FlatContainerVersionList, cancellationToken: token);
 
             var result =
 #if NETSTANDARD
@@ -606,7 +606,7 @@ namespace NuGet.Protocol
             return contentUri;
         }
 
-        record struct FlatContainerVersionList
+        internal record struct FlatContainerVersionList
         {
             [JsonPropertyName("versions")]
             public List<string>? Versions { get; set; }
