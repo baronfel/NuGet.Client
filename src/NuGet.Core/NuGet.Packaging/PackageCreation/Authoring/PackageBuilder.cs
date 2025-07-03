@@ -39,33 +39,33 @@ namespace NuGet.Packaging
         /// </summary>
         public const int MaxIconFileSize = 1024 * 1024;
 
-        public PackageBuilder(string path, Func<string, string> propertyProvider, bool includeEmptyDirectories)
-            : this(path, propertyProvider, includeEmptyDirectories, deterministic: false)
+        public PackageBuilder(string path, Func<string, string> propertyProvider, Func<string> versionFetcher, bool includeEmptyDirectories)
+            : this(path, propertyProvider, versionFetcher, includeEmptyDirectories, deterministic: false)
         {
         }
 
-        public PackageBuilder(string path, Func<string, string> propertyProvider, bool includeEmptyDirectories, bool deterministic)
-            : this(path, Path.GetDirectoryName(path), propertyProvider, includeEmptyDirectories, deterministic)
+        public PackageBuilder(string path, Func<string, string> propertyProvider, Func<string> versionFetcher, bool includeEmptyDirectories, bool deterministic)
+            : this(path, Path.GetDirectoryName(path), propertyProvider, versionFetcher, includeEmptyDirectories, deterministic)
         {
         }
 
-        public PackageBuilder(string path, Func<string, string> propertyProvider, bool includeEmptyDirectories, bool deterministic, ILogger logger)
-            : this(path, Path.GetDirectoryName(path), propertyProvider, includeEmptyDirectories, deterministic, logger)
+        public PackageBuilder(string path, Func<string, string> propertyProvider, Func<string> versionFetcher, bool includeEmptyDirectories, bool deterministic, ILogger logger)
+            : this(path, Path.GetDirectoryName(path), propertyProvider, versionFetcher, includeEmptyDirectories, deterministic, logger)
         {
         }
 
-        public PackageBuilder(string path, string basePath, Func<string, string> propertyProvider, bool includeEmptyDirectories)
-            : this(path, basePath, propertyProvider, includeEmptyDirectories, deterministic: false)
+        public PackageBuilder(string path, string basePath, Func<string, string> propertyProvider, Func<string> versionFetcher, bool includeEmptyDirectories)
+            : this(path, basePath, propertyProvider, versionFetcher, includeEmptyDirectories, deterministic: false)
         {
         }
 
-        public PackageBuilder(string path, string basePath, Func<string, string> propertyProvider, bool includeEmptyDirectories, bool deterministic, ILogger logger)
-            : this(path, basePath, propertyProvider, includeEmptyDirectories, deterministic)
+        public PackageBuilder(string path, string basePath, Func<string, string> propertyProvider, Func<string> versionFetcher, bool includeEmptyDirectories, bool deterministic, ILogger logger)
+            : this(path, basePath, propertyProvider, versionFetcher, includeEmptyDirectories, deterministic)
         {
             _logger = logger;
         }
 
-        public PackageBuilder(string path, string basePath, Func<string, string> propertyProvider, bool includeEmptyDirectories, bool deterministic)
+        public PackageBuilder(string path, string basePath, Func<string, string> propertyProvider, Func<string> versionFetcher, bool includeEmptyDirectories, bool deterministic)
             : this(includeEmptyDirectories, deterministic)
         {
             if (!File.Exists(path))
@@ -77,19 +77,19 @@ namespace NuGet.Packaging
 
             using (Stream stream = File.OpenRead(path))
             {
-                ReadManifest(stream, basePath, propertyProvider);
+                ReadManifest(stream, basePath, propertyProvider, versionFetcher);
             }
         }
 
         public PackageBuilder(Stream stream, string basePath)
-            : this(stream, basePath, null)
+            : this(stream, basePath, null, null)
         {
         }
 
-        public PackageBuilder(Stream stream, string basePath, Func<string, string> propertyProvider)
+        public PackageBuilder(Stream stream, string basePath, Func<string, string> propertyProvider, Func<string> versionFetcher)
             : this()
         {
-            ReadManifest(stream, basePath, propertyProvider);
+            ReadManifest(stream, basePath, propertyProvider, versionFetcher);
         }
 
         public PackageBuilder(bool deterministic) :
@@ -923,10 +923,10 @@ namespace NuGet.Packaging
             }
         }
 
-        private void ReadManifest(Stream stream, string basePath, Func<string, string> propertyProvider)
+        private void ReadManifest(Stream stream, string basePath, Func<string, string> propertyProvider, Func<string> versionFetcher)
         {
             // Deserialize the document and extract the metadata
-            Manifest manifest = Manifest.ReadFrom(stream, propertyProvider, validateSchema: true);
+            Manifest manifest = Manifest.ReadFrom(stream, propertyProvider, validateSchema: true, versionFetcher);
 
             Populate(manifest.Metadata);
 

@@ -3,6 +3,9 @@
 
 using System;
 using System.Collections;
+#if NET
+using System.Diagnostics.CodeAnalysis;
+#endif
 using System.Linq;
 using System.Reflection;
 
@@ -51,14 +54,17 @@ namespace NuGet.Packaging
             return DefaultVersion;
         }
 
-        private static int GetVersionFromObject(object obj)
+        private static int GetVersionFromObject<
+#if NET
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.NonPublicProperties)]
+#endif
+        T>(T obj)
         {
             // all public, gettable, non-static properties
-            return obj?.GetType()
+            return typeof(T)
                        .GetRuntimeProperties()
                        .Where(prop => prop.GetMethod != null && prop.GetMethod.IsPublic && !prop.GetMethod.IsStatic)
-                       .Max(prop => GetVersionFromPropertyInfo(obj, prop))
-                      ?? DefaultVersion;
+                       .Max(prop => GetVersionFromPropertyInfo(obj, prop));
         }
 
         private static int GetVersionFromPropertyInfo(object obj, PropertyInfo property)

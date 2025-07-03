@@ -1,1 +1,12 @@
 #nullable enable
+NuGet.Packaging.PackageBuilder.PackageBuilder(bool deterministic) -> void
+~NuGet.Packaging.PackageBuilder.PackageBuilder(bool deterministic, NuGet.Common.ILogger logger) -> void
+~NuGet.Packaging.PackageBuilder.PackageBuilder(string path, string basePath, System.Func<string, string> propertyProvider, System.Func<string> versionFetcher, bool includeEmptyDirectories) -> void
+~NuGet.Packaging.PackageBuilder.PackageBuilder(string path, string basePath, System.Func<string, string> propertyProvider, System.Func<string> versionFetcher, bool includeEmptyDirectories, bool deterministic) -> void
+~NuGet.Packaging.PackageBuilder.PackageBuilder(string path, string basePath, System.Func<string, string> propertyProvider, System.Func<string> versionFetcher, bool includeEmptyDirectories, bool deterministic, NuGet.Common.ILogger logger) -> void
+~NuGet.Packaging.PackageBuilder.PackageBuilder(string path, System.Func<string, string> propertyProvider, System.Func<string> versionFetcher, bool includeEmptyDirectories) -> void
+~NuGet.Packaging.PackageBuilder.PackageBuilder(string path, System.Func<string, string> propertyProvider, System.Func<string> versionFetcher, bool includeEmptyDirectories, bool deterministic) -> void
+~NuGet.Packaging.PackageBuilder.PackageBuilder(string path, System.Func<string, string> propertyProvider, System.Func<string> versionFetcher, bool includeEmptyDirectories, bool deterministic, NuGet.Common.ILogger logger) -> void
+~NuGet.Packaging.PackageBuilder.PackageBuilder(System.IO.Stream stream, string basePath) -> void
+~NuGet.Packaging.PackageBuilder.PackageBuilder(System.IO.Stream stream, string basePath, System.Func<string, string> propertyProvider, System.Func<string> versionFetcher) -> void
+~static NuGet.Packaging.Manifest.ReadFrom(System.IO.Stream stream, System.Func<string, string> propertyProvider, bool validateSchema, System.Func<string> versionFetcher) -> NuGet.Packaging.Manifest

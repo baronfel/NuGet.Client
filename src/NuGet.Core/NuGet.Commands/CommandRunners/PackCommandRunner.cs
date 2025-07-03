@@ -3,6 +3,9 @@
 
 using System;
 using System.Collections.Generic;
+#if NET
+using System.Diagnostics.CodeAnalysis;
+#endif
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -457,7 +460,7 @@ namespace NuGet.Commands
             return new PackageBuilder(
                 path,
                 _packArgs.BasePath,
-                _packArgs.GetPropertyValue,
+                [Dynamic(DynamicallyAccessedMemberTypes.PublicProperties)]_packArgs.GetPropertyValue,
                 !_packArgs.ExcludeEmptyDirectories,
                 _packArgs.Deterministic,
                 _packArgs.Logger);

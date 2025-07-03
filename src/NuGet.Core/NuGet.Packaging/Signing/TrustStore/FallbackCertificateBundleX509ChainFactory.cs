@@ -56,13 +56,7 @@ namespace NuGet.Packaging.Signing
             return false;
         }
 
-        private static string GetThisAssemblyDirectoryPath()
-        {
-            string location = typeof(FallbackCertificateBundleX509ChainFactory).Assembly.Location;
-            FileInfo thisAssembly = new(location);
-
-            return thisAssembly.DirectoryName;
-        }
+        private static string GetThisAssemblyDirectoryPath() => System.AppContext.BaseDirectory;
     }
 }
 

@@ -30,6 +30,7 @@ namespace NuGet.Packaging
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         };
+        private static readonly JsonSerializationContext JsonSerializationContext = new JsonSerializationContext(JsonSerializerOptions);
 
         public static NupkgMetadataFile Read(string filePath)
         {
@@ -47,7 +48,7 @@ namespace NuGet.Packaging
 
             try
             {
-                NupkgMetadataFile nupkgMetadata = System.Text.Json.JsonSerializer.Deserialize<NupkgMetadataFile>(stream, JsonSerializerOptions);
+                NupkgMetadataFile nupkgMetadata = System.Text.Json.JsonSerializer.Deserialize<NupkgMetadataFile>(stream, JsonSerializationContext.NupkgMetadataFile);
                 if (nupkgMetadata == null)
                 {
                     throw new InvalidDataException();
@@ -114,7 +115,7 @@ namespace NuGet.Packaging
         {
             if (stream is null) { throw new ArgumentNullException(nameof(stream)); }
 
-            System.Text.Json.JsonSerializer.Serialize(stream, hashFile, JsonSerializerOptions);
+            System.Text.Json.JsonSerializer.Serialize(stream, hashFile, JsonSerializationContext.NupkgMetadataFile);
         }
 
         [Obsolete("Use a different overload for better performance. This overload will get deleted in the future.")]
