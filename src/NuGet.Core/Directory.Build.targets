@@ -1,0 +1,5 @@
+<Project>
+  <PropertyGroup>
+    <IsAotCompatible>$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net7.0'))</IsAotCompatible>
+  </PropertyGroup>
+</Project>

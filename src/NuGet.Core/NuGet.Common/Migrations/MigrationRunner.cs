@@ -2,6 +2,9 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+#if NET
+using System.Diagnostics.CodeAnalysis;
+#endif
 using System.Diagnostics.Tracing;
 using System.IO;
 using System.Threading;
@@ -115,7 +118,9 @@ namespace NuGet.Common.Migrations
 
                 NuGetEventSource.Instance.Write(EventNameMigrationRun, eventOptions);
             }
-
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void RunStop(string migrationFilePath, bool migrationPerformed)
             {
                 var eventOptions = new EventSourceOptions

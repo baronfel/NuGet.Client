@@ -250,6 +250,9 @@ namespace NuGet.Configuration
         {
             private const string EventNameFileRead = "SettingsFile/FileRead";
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void FileReadStart(string configFilePath, bool isMachineWide, bool isReadOnly)
             {
                 var eventOptions = new EventSourceOptions
@@ -262,6 +265,9 @@ namespace NuGet.Configuration
                 NuGetEventSource.Instance.Write(EventNameFileRead, eventOptions, new FileReadEventData(configFilePath, isMachineWide, isReadOnly));
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void FileReadStop(string configFilePath, bool isMachineWide, bool isReadOnly)
             {
                 var eventOptions = new EventSourceOptions

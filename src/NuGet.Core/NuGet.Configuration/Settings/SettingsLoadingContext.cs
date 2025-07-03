@@ -3,6 +3,9 @@
 
 using System;
 using System.Collections.Concurrent;
+#if NET
+using System.Diagnostics.CodeAnalysis;
+#endif
 using System.Diagnostics.Tracing;
 using System.IO;
 using NuGet.Common;
@@ -87,6 +90,9 @@ namespace NuGet.Configuration
         {
             private const string EventNameFileRead = "SettingsLoadingContext/FileRead";
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void FileRead(string filePath, bool isMachineWide, bool isReadOnly)
             {
                 var eventOptions = new EventSourceOptions
