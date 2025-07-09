@@ -4,6 +4,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+#if NET
+using System.Diagnostics.CodeAnalysis;
+#endif
 using System.Diagnostics.Tracing;
 using System.Globalization;
 using System.IO;
@@ -412,6 +415,9 @@ namespace NuGet.Commands
             private const string EventNameRestoreProject = "RestoreRunner/RestoreProject";
             private const string EventNameCommitAsync = "RestoreRunner/CommitAsync";
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void RestoreProjectStart(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -424,6 +430,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameRestoreProject, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void RestoreProjectStop(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -436,6 +445,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameRestoreProject, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void CommitAsyncStart(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -448,6 +460,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameCommitAsync, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void CommitAsyncStop(string filePath)
             {
                 var eventOptions = new EventSourceOptions

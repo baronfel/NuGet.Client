@@ -41,7 +41,7 @@ namespace NuGet.ProjectManagement
 
         void AddImport(string targetFullPath, ImportLocation location);
         void RemoveImport(string targetFullPath);
-        dynamic GetPropertyValue(string propertyName);
+        string GetPropertyValue(string propertyName);
         string ResolvePath(string path);
         bool IsSupportedFile(string path);
         void AddBindingRedirects();

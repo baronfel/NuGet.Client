@@ -20,7 +20,7 @@ namespace NuGet.PackageManagement.Utility
 {
     public static class PackagesConfigLockFileUtility
     {
-        private static readonly IComparer _dependencyComparer = new DependencyComparer();
+        private static readonly IComparer Comparer = new DependencyComparer();
 
         internal static void UpdateLockFile(
             MSBuildNuGetProject msbuildProject,
@@ -230,7 +230,7 @@ namespace NuGet.PackageManagement.Utility
                 actionsList.Where(a => a.NuGetProjectActionType == NuGetProjectActionType.Install),
                 contentHashUtil,
                 token);
-            ArrayList.Adapter((IList)lockFile.Targets[0].Dependencies).Sort(_dependencyComparer);
+            ArrayList.Adapter((IList)lockFile.Targets[0].Dependencies).Sort(Comparer);
         }
 
         private static void RemoveUninstalledPackages(PackagesLockFile lockFile, IEnumerable<NuGetProjectAction> actionsList)

@@ -1457,6 +1457,9 @@ namespace NuGet.Commands
             private const string EventNameCreateRestoreTargetGraph = "DependencyGraphResolver/CreateRestoreTargetGraph";
             private const string EventNameResolveDependencyGraphItems = "DependencyGraphResolver/ResolveDependencyGraphItems";
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void CreateRestoreTargetGraphStart(string projectFullPath, FrameworkRuntimePair frameworkRuntimePair)
             {
                 EventSourceOptions eventOptions = new()
@@ -1470,6 +1473,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameCreateRestoreTargetGraph, eventOptions, new CreateRestoreTargetGraphStartEventData(projectFullPath, frameworkRuntimePair.ToString()));
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void CreateRestoreTargetGraphStop(string projectFullPath, FrameworkRuntimePair frameworkRuntimePair, bool wasRestoreTargetGraphCreationSuccessful, int resolvedPackageCount, int unresolvedPackageCount)
             {
                 EventSourceOptions eventOptions = new()
@@ -1482,6 +1488,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameCreateRestoreTargetGraph, eventOptions, new CreateRestoreTargetGraphStopEventData(projectFullPath, frameworkRuntimePair.ToString(), wasRestoreTargetGraphCreationSuccessful, resolvedPackageCount, unresolvedPackageCount));
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void ResolveDependencyGraphItemsStart(string projectFullPath, FrameworkRuntimePair frameworkRuntimePair)
             {
                 EventSourceOptions eventOptions = new()
@@ -1495,6 +1504,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameResolveDependencyGraphItems, eventOptions, new ResolveDependencyGraphItemsStartEventData(projectFullPath, frameworkRuntimePair.ToString()));
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void ResolveDependencyGraphItemsStop(string projectFullPath, FrameworkRuntimePair frameworkRuntimePair, int resolvedPackagesCount, int restartCount, int totalQueuedItemCount)
             {
                 EventSourceOptions eventOptions = new()

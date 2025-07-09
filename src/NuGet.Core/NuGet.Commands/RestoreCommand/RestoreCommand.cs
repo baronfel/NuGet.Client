@@ -4,6 +4,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+#if NET
+using System.Diagnostics.CodeAnalysis;
+#endif
 using System.Diagnostics.Tracing;
 using System.Globalization;
 using System.IO;
@@ -2001,6 +2004,9 @@ namespace NuGet.Commands
             private const string EventNameBuildRestoreGraph = "RestoreCommand/BuildRestoreGraph";
             private const string EventNameCalcNoOpRestore = "RestoreCommand/CalcNoOpRestore";
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void BuildAssetsFileStart(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -2013,6 +2019,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameBuildAssetsFile, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void BuildAssetsFileStop(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -2025,6 +2034,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameBuildAssetsFile, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void BuildRestoreGraphStart(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -2037,6 +2049,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameBuildRestoreGraph, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void BuildRestoreGraphStop(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -2049,6 +2064,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameBuildRestoreGraph, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void CalcNoOpRestoreStart(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -2061,6 +2079,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameCalcNoOpRestore, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void CalcNoOpRestoreStop(string filePath)
             {
                 var eventOptions = new EventSourceOptions

@@ -11,6 +11,14 @@ using NuGet.Common;
 
 namespace NuGet.ProjectModel
 {
+    [JsonSourceGenerationOptions]
+    [JsonSerializable(typeof(CacheFile))]
+    [JsonSerializable(typeof(AssetsLogMessage))]
+    internal partial class Context : JsonSerializerContext
+    {
+
+    }
+
     public static class CacheFileFormat
     {
         private static JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
@@ -24,6 +32,8 @@ namespace NuGet.ProjectModel
             AllowTrailingCommas = true
         };
 
+        private static readonly Context Context = new Context(SerializerOptions);
+
         /// <summary>
         /// Since Log messages property in CacheFile is an interface type, we have the following custom converter to deserialize the IAssetsLogMessage objects.
         /// </summary>
@@ -31,12 +41,12 @@ namespace NuGet.ProjectModel
         {
             public override IAssetsLogMessage Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
             {
-                return JsonSerializer.Deserialize<AssetsLogMessage>(ref reader, options);
+                return JsonSerializer.Deserialize<AssetsLogMessage>(ref reader, new Context(options).AssetsLogMessage);
             }
 
             public override void Write(Utf8JsonWriter writer, IAssetsLogMessage value, JsonSerializerOptions options)
             {
-                JsonSerializer.Serialize(writer, (AssetsLogMessage)value, options);
+                JsonSerializer.Serialize(writer, (AssetsLogMessage)value, new Context(options).AssetsLogMessage);
             }
         }
 
@@ -48,7 +58,7 @@ namespace NuGet.ProjectModel
 
             try
             {
-                var cacheFile = JsonSerializer.Deserialize<CacheFile>(utf8Json: stream, SerializerOptions);
+                var cacheFile = JsonSerializer.Deserialize<CacheFile>(utf8Json: stream, Context.CacheFile);
                 return cacheFile;
             }
             catch (Exception ex) when (ex is ArgumentNullException || ex is JsonException || ex is NotSupportedException)
@@ -87,7 +97,7 @@ namespace NuGet.ProjectModel
 
         private static void Write(TextWriter textWriter, CacheFile cacheFile)
         {
-            textWriter.Write(JsonSerializer.Serialize(cacheFile, SerializerOptions));
+            textWriter.Write(JsonSerializer.Serialize(cacheFile, Context.CacheFile));
         }
     }
 }

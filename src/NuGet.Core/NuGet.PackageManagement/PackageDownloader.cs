@@ -220,7 +220,7 @@ namespace NuGet.PackageManagement
                         message = ExceptionUtilities.DisplayMessage(task.Exception);
                     }
 
-                    errors.AppendLine($"  {tasksLookup[task].PackageSource.Source}: {message}");
+                    errors.AppendLine((string)$"  {tasksLookup[task].PackageSource.Source}: {message}");
                 }
 
                 throw new FatalProtocolException(errors.ToString());

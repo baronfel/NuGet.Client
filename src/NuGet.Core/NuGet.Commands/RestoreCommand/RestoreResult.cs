@@ -3,6 +3,9 @@
 
 using System;
 using System.Collections.Generic;
+#if NET
+using System.Diagnostics.CodeAnalysis;
+#endif
 using System.Diagnostics.Tracing;
 using System.Globalization;
 using System.IO;
@@ -81,7 +84,7 @@ namespace NuGet.Commands
         /// <summary>
         /// NuGet lock file which is either generated or updated to lock down NuGet packages version
         /// </summary>
-        internal PackagesLockFile _newPackagesLockFile { get; }
+        internal PackagesLockFile NewPackagesLockFile { get; }
 
         /// <inheritdoc cref="RestoreSummary.AuditRan"/>
         internal bool AuditRan { get; init; }
@@ -127,7 +130,7 @@ namespace NuGet.Commands
             CacheFile = cacheFile;
             CacheFilePath = cacheFilePath;
             _newPackagesLockFilePath = packagesLockFilePath;
-            _newPackagesLockFile = packagesLockFile;
+            NewPackagesLockFile = packagesLockFile;
             _dependencyGraphSpecFilePath = dependencyGraphSpecFilePath;
             _dependencyGraphSpec = dependencyGraphSpec;
             ProjectStyle = projectStyle;
@@ -302,14 +305,14 @@ namespace NuGet.Commands
         private async Task CommitLockFileAsync(ILogger log, bool toolCommit)
         {
             // write packages lock file if it's not tool commit
-            if (!toolCommit && _newPackagesLockFile != null && !string.IsNullOrEmpty(_newPackagesLockFilePath))
+            if (!toolCommit && NewPackagesLockFile != null && !string.IsNullOrEmpty(_newPackagesLockFilePath))
             {
                 log.LogInformation(string.Format(CultureInfo.CurrentCulture,
                 Strings.Log_WritingPackagesLockFile,
                 _newPackagesLockFilePath));
 
                 await FileUtility.ReplaceWithLock(
-                    (outputPath) => PackagesLockFileFormat.Write(outputPath, _newPackagesLockFile),
+                    (outputPath) => PackagesLockFileFormat.Write(outputPath, NewPackagesLockFile),
                     _newPackagesLockFilePath);
             }
         }
@@ -350,6 +353,9 @@ namespace NuGet.Commands
             private const string EventNameWritePackagesLockFile = "RestoreResult/WritePackagesLockFile";
             private const string EventNameWriteDgSpecFile = "RestoreResult/WriteDgSpecFile";
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void WriteAssetsFileStart(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -362,6 +368,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameWriteAssetsFile, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void WriteAssetsFileStop(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -374,6 +383,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameWriteAssetsFile, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void WriteCacheFileStart(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -386,6 +398,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameWriteCacheFile, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void WriteCacheFileStop(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -398,6 +413,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameWriteCacheFile, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void WritePackagesLockFileStart(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -410,6 +428,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameWritePackagesLockFile, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void WritePackagesLockFileStop(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -422,6 +443,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameWritePackagesLockFile, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void WriteDgSpecFileStart(string filePath)
             {
                 var eventOptions = new EventSourceOptions
@@ -434,6 +458,9 @@ namespace NuGet.Commands
                 NuGetEventSource.Instance.Write(EventNameWriteDgSpecFile, eventOptions, new { FilePath = filePath });
             }
 
+#if NET
+            [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "<Pending>")]
+#endif
             public static void WriteDgSpecFileStop(string filePath)
             {
                 var eventOptions = new EventSourceOptions
