@@ -1,9 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
+using System.IO;
 using System.Linq;
+using System.Text;
 using Newtonsoft.Json.Linq;
+using NuGet.Common;
 using NuGet.Frameworks;
+using NuGet.Test.Utility;
 using NuGet.Versioning;
 using Xunit;
 
@@ -58,6 +63,313 @@ namespace NuGet.ProjectModel.Test
             Assert.Null(target.Dependencies[1].RequestedVersion);
             Assert.Equal("1.0.0", target.Dependencies[0].ResolvedVersion.ToNormalizedString());
             Assert.NotEmpty(target.Dependencies[1].ContentHash);
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_ReadWithCommentsAndVersionAfterDependencies()
+        {
+            // Newtonsoft accepts comments, trailing commas, null dependency ranges, and a version property after dependencies.
+            var lockFileContent = """
+                {
+                    // The version property is not required to be first.
+                    "dependencies": {
+                        "net8.0": {
+                            "PackageA": {
+                                "type": "Direct",
+                                "resolved": "1.0.0",
+                                "dependencies": {
+                                    "PackageB": null,
+                                },
+                            },
+                        },
+                    },
+                    "version": 1,
+                }
+                """;
+
+            PackagesLockFile lockFile = ParseWithSystemTextJson(lockFileContent);
+
+            Assert.Equal(1, lockFile.Version);
+            var target = Assert.Single(lockFile.Targets);
+            Assert.Equal(NuGetFramework.Parse("net8.0"), target.TargetFramework);
+            var package = Assert.Single(target.Dependencies);
+            Assert.Equal("PackageA", package.Id);
+            Assert.Equal(VersionRange.All, Assert.Single(package.Dependencies).VersionRange);
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_ReadVersion3WithVersionAfterTargets()
+        {
+            // Newtonsoft accepts the V3 version property after target properties.
+            var lockFileContent = """
+                {
+                    "net8.0": {
+                        "framework": "net8.0",
+                        "dependencies": {
+                            "PackageA": {
+                                "type": "Direct",
+                                "resolved": "1.0.0"
+                            }
+                        }
+                    },
+                    "version": 3
+                }
+                """;
+
+            PackagesLockFile lockFile = ParseWithSystemTextJson(lockFileContent);
+
+            Assert.Equal(3, lockFile.Version);
+            var target = Assert.Single(lockFile.Targets);
+            Assert.Equal("net8.0", target.TargetAlias);
+            Assert.Equal("PackageA", Assert.Single(target.Dependencies).Id);
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_ReadLockFileWithSystemTextJsonUtf8Bom_ParsesLockFile()
+        {
+            var stream = new MemoryStream();
+            using (var writer = new StreamWriter(
+                stream,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: true),
+                bufferSize: 1024,
+                leaveOpen: true))
+            {
+                writer.Write(@"{ ""version"": 1, ""dependencies"": {} }");
+            }
+            stream.Position = 0;
+
+            PackagesLockFile lockFile = PackagesLockFileFormat.ReadLockFile(stream);
+
+            // Package-lock stream reads historically take ownership of the input stream.
+            Assert.False(stream.CanRead);
+            Assert.Equal(1, lockFile.Version);
+        }
+
+        [Theory]
+        [InlineData(1, false, false)]
+        [InlineData(1, false, true)]
+        [InlineData(1, true, false)]
+        [InlineData(1, true, true)]
+        [InlineData(2, false, false)]
+        [InlineData(2, false, true)]
+        [InlineData(2, true, false)]
+        [InlineData(2, true, true)]
+        public void PackagesLockFileFormat_ReadEncodedStream_ParsesAndDisposesSource(
+            int encodingKind,
+            bool bigEndian,
+            bool useNonSeekableStream)
+        {
+            // StreamReader historically detected UTF-16/32 BOMs for both seekable and nonseekable package-lock streams.
+            const string content = """{"version":1,"dependencies":{"net10.0":{}}}""";
+            Encoding encoding = encodingKind switch
+            {
+                1 => new UnicodeEncoding(bigEndian, byteOrderMark: true),
+                2 => new UTF32Encoding(bigEndian, byteOrderMark: true),
+                _ => throw new ArgumentOutOfRangeException(nameof(encodingKind)),
+            };
+            byte[] preamble = encoding.GetPreamble();
+            byte[] encodedContent = encoding.GetBytes(content);
+            var bytes = new byte[preamble.Length + encodedContent.Length];
+            Array.Copy(preamble, bytes, preamble.Length);
+            Array.Copy(encodedContent, 0, bytes, preamble.Length, encodedContent.Length);
+            Stream source = new MemoryStream(bytes);
+            if (useNonSeekableStream)
+            {
+                source = new ChunkedReadStream(source, maxBytesPerRead: 1);
+            }
+
+            PackagesLockFile lockFile = PackagesLockFileFormat.Read(source, NullLogger.Instance, "encoded.lock.json");
+
+            Assert.Equal(1, lockFile.Version);
+            Assert.Equal(NuGetFramework.Parse("net10.0"), Assert.Single(lockFile.Targets).TargetFramework);
+            // Package-lock stream reads historically dispose their source.
+            Assert.False(source.CanRead);
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_ReadLockFileWithSystemTextJsonLeadingTriviaLargerThanBuffer_ParsesLockFile()
+        {
+            // Newtonsoft accepts leading JSON whitespace regardless of its size.
+            string content = new string(' ', 20_000) + """{"version":1,"dependencies":{}}""";
+
+            PackagesLockFile lockFile = ParseWithSystemTextJson(content);
+
+            Assert.Equal(1, lockFile.Version);
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_ReadMalformedJson_LogsDiagnosticAndDisposesStream()
+        {
+            var stream = new MemoryStream(Encoding.UTF8.GetBytes("""{"version":1"""));
+            var logger = new TestLogger();
+
+            PackagesLockFile lockFile = PackagesLockFileFormat.Read(stream, logger, "broken.lock.json");
+
+            // Malformed input historically logs information and returns an invalid-version sentinel instead of throwing.
+            Assert.Equal(int.MinValue, lockFile.Version);
+            Assert.Equal("broken.lock.json", lockFile.Path);
+            Assert.False(stream.CanRead);
+            Assert.Contains("broken.lock.json", Assert.Single(logger.InformationMessages));
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_ReadWhenBomProbeThrows_ReturnsFallbackAndDisposesSource()
+        {
+            // StreamReader historically owns and disposes the source even when encoding detection fails.
+            var stream = new ThrowingReadStream();
+            var logger = new TestLogger();
+
+            PackagesLockFile lockFile = PackagesLockFileFormat.Read(stream, logger, "unreadable.lock.json");
+
+            Assert.Equal(int.MinValue, lockFile.Version);
+            Assert.Equal("unreadable.lock.json", lockFile.Path);
+            Assert.True(stream.IsDisposed);
+            Assert.Contains("unreadable.lock.json", Assert.Single(logger.InformationMessages));
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_ReadWithTextReader_ParsesAndDisposesReader()
+        {
+            var reader = new ThrowingReadToEndStringReader("""
+                {
+                  "version": 3,
+                  "net10.0": {
+                    "framework": "net10.0",
+                    "dependencies": {
+                      "PackageA": {
+                        "type": "Direct",
+                        "resolved": "1.2.3"
+                      }
+                    }
+                  }
+                }
+                """);
+
+#pragma warning disable CS0618 // Verify the retained compatibility API.
+            PackagesLockFile lockFile = PackagesLockFileFormat.Read(reader, NullLogger.Instance, "text-reader.lock.json");
+#pragma warning restore CS0618
+
+            // The obsolete Newtonsoft path parses incrementally and historically owns the supplied TextReader.
+            Assert.Equal("text-reader.lock.json", lockFile.Path);
+            Assert.Equal("PackageA", Assert.Single(Assert.Single(lockFile.Targets).Dependencies).Id);
+            Assert.Throws<ObjectDisposedException>(() => reader.Read());
+        }
+
+        [Fact]
+        [UseCulture("fr-FR")]
+        public void PackagesLockFileFormat_ReadNumericScalars_MatchesNewtonsoftJson()
+        {
+            // Newtonsoft normalizes JSON numeric values with invariant culture before package version parsing.
+            const string content = """
+                {
+                  "version": 1.0,
+                  "dependencies": {
+                    "net10.0": {
+                      "PackageA": {
+                        "type": 1.0,
+                        "requested": 1.10,
+                        "resolved": 2.10,
+                        "contentHash": 4.10,
+                        "dependencies": {
+                          "PackageB": 3.10
+                        }
+                      }
+                    }
+                  }
+                }
+                """;
+
+            (PackagesLockFile legacy, PackagesLockFile streaming) = ReadWithBothReaders(content);
+
+            // Newtonsoft coerces an integral floating-point root version to an integer.
+            Assert.Equal(1, legacy.Version);
+            Assert.Equal(legacy.Version, streaming.Version);
+
+            LockFileDependency legacyPackage = Assert.Single(Assert.Single(legacy.Targets).Dependencies);
+            LockFileDependency streamingPackage = Assert.Single(Assert.Single(streaming.Targets).Dependencies);
+            // A numeric package type does not map to an enum name and retains the default value.
+            Assert.Equal(PackageDependencyType.Transitive, legacyPackage.Type);
+            Assert.Equal(legacyPackage.Type, streamingPackage.Type);
+            Assert.NotNull(legacyPackage.RequestedVersion);
+            Assert.NotNull(legacyPackage.RequestedVersion.MinVersion);
+            // Newtonsoft normalizes numeric requested versions before VersionRange parsing.
+            Assert.Equal("1.1.0", legacyPackage.RequestedVersion.MinVersion.ToNormalizedString());
+            Assert.Equal(legacyPackage.RequestedVersion, streamingPackage.RequestedVersion);
+            Assert.NotNull(legacyPackage.ResolvedVersion);
+            // Newtonsoft normalizes numeric resolved versions before NuGetVersion parsing.
+            Assert.Equal("2.1.0", legacyPackage.ResolvedVersion.ToNormalizedString());
+            Assert.Equal(legacyPackage.ResolvedVersion, streamingPackage.ResolvedVersion);
+            // Newtonsoft exposes numeric scalar fields using invariant normalized text.
+            Assert.Equal("4.1", legacyPackage.ContentHash);
+            Assert.Equal(legacyPackage.ContentHash, streamingPackage.ContentHash);
+
+            NuGet.Packaging.Core.PackageDependency legacyDependency = Assert.Single(legacyPackage.Dependencies);
+            NuGet.Packaging.Core.PackageDependency streamingDependency = Assert.Single(streamingPackage.Dependencies);
+            Assert.NotNull(legacyDependency.VersionRange);
+            Assert.NotNull(legacyDependency.VersionRange.MinVersion);
+            // Newtonsoft normalizes numeric dependency ranges before VersionRange parsing.
+            Assert.Equal("3.1.0", legacyDependency.VersionRange.MinVersion.ToNormalizedString());
+            Assert.Equal(legacyDependency.VersionRange, streamingDependency.VersionRange);
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_ReadTrailingContent_MatchesNewtonsoftJson()
+        {
+            // Newtonsoft stops after the first root object and ignores trailing content.
+            const string content = """
+                {
+                  "version": 1,
+                  "dependencies": {
+                    "net10.0": {}
+                  }
+                }
+                trailing content is ignored
+                """;
+
+            (PackagesLockFile legacy, PackagesLockFile streaming) = ReadWithBothReaders(content);
+
+            Assert.Equal(1, legacy.Version);
+            Assert.Equal(legacy.Version, streaming.Version);
+            Assert.Equal(Assert.Single(legacy.Targets).TargetFramework, Assert.Single(streaming.Targets).TargetFramework);
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_ReadLockFileWithSystemTextJsonDuplicateDependencies_UsesLastValue()
+        {
+            // JObject lookup preserves Newtonsoft's last-duplicate-wins behavior.
+            const string content = """
+                {
+                    "version": 1,
+                    "dependencies": {
+                        "net8.0": {
+                            "PackageA": null,
+                            "PackageA": { "type": "Direct", "resolved": "2.0.0" }
+                        }
+                    }
+                }
+                """;
+
+            PackagesLockFile lockFile = ParseWithSystemTextJson(content);
+
+            LockFileDependency dependency = Assert.Single(Assert.Single(lockFile.Targets).Dependencies);
+            Assert.Equal(NuGetVersion.Parse("2.0.0"), dependency.ResolvedVersion);
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_ReadLockFileWithSystemTextJsonInvalidLastDuplicateTarget_IgnoresTarget()
+        {
+            // Newtonsoft uses the last duplicate target value, including an invalid value that removes the target.
+            const string content = """
+                {
+                    "version": 3,
+                    "net8.0": { "framework": "net8.0", "dependencies": {} },
+                    "net8.0": null
+                }
+                """;
+
+            PackagesLockFile lockFile = ParseWithSystemTextJson(content);
+
+            Assert.Empty(lockFile.Targets);
         }
 
         [Fact]
@@ -449,6 +761,120 @@ namespace NuGet.ProjectModel.Test
             Assert.Equal(2, lockFile.Version);
             Assert.Equal(1, lockFile.Targets.Count);
             Assert.Null(lockFile.Targets[0].TargetAlias);
+        }
+
+        private static PackagesLockFile ParseWithSystemTextJson(string content)
+        {
+            var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+            return PackagesLockFileFormat.ReadLockFile(stream);
+        }
+
+        private static (PackagesLockFile Legacy, PackagesLockFile Streaming) ReadWithBothReaders(string content)
+        {
+#pragma warning disable CS0618 // Compare the retained compatibility API with the streaming replacement.
+            PackagesLockFile legacy = PackagesLockFileFormat.Read(
+                new StringReader(content),
+                NullLogger.Instance,
+                "legacy");
+#pragma warning restore CS0618
+            PackagesLockFile streaming = PackagesLockFileFormat.Read(
+                new MemoryStream(Encoding.UTF8.GetBytes(content)),
+                NullLogger.Instance,
+                "streaming");
+
+            return (legacy, streaming);
+        }
+
+        private sealed class ThrowingReadToEndStringReader : StringReader
+        {
+            internal ThrowingReadToEndStringReader(string value)
+                : base(value)
+            {
+            }
+
+            public override string ReadToEnd()
+            {
+                throw new InvalidOperationException("The compatibility path must not buffer the complete TextReader input as a string.");
+            }
+        }
+
+        private sealed class ChunkedReadStream : Stream
+        {
+            private readonly Stream _stream;
+            private readonly int _maxBytesPerRead;
+
+            internal ChunkedReadStream(Stream stream, int maxBytesPerRead)
+            {
+                _stream = stream;
+                _maxBytesPerRead = maxBytesPerRead;
+            }
+
+            public override bool CanRead => _stream.CanRead;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => throw new NotSupportedException();
+            public override long Position
+            {
+                get => throw new NotSupportedException();
+                set => throw new NotSupportedException();
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                return _stream.Read(buffer, offset, Math.Min(count, _maxBytesPerRead));
+            }
+
+            public override void Flush()
+            {
+            }
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                {
+                    _stream.Dispose();
+                }
+
+                base.Dispose(disposing);
+            }
+
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        }
+
+        private sealed class ThrowingReadStream : Stream
+        {
+            internal bool IsDisposed { get; private set; }
+
+            public override bool CanRead => !IsDisposed;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => throw new NotSupportedException();
+            public override long Position
+            {
+                get => throw new NotSupportedException();
+                set => throw new NotSupportedException();
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                throw new IOException("The source cannot be read.");
+            }
+
+            public override void Flush()
+            {
+            }
+
+            protected override void Dispose(bool disposing)
+            {
+                IsDisposed = true;
+                base.Dispose(disposing);
+            }
+
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
         }
     }
 }
