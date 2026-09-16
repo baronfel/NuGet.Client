@@ -3,6 +3,7 @@
     <TargetFrameworks>$(TargetFrameworksLibrary)</TargetFrameworks>
     <TargetFramework />
     <NoWarn>$(NoWarn);CS1591;CS1573;RS0041</NoWarn>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PackProject>true</PackProject>
     <Shipping>true</Shipping>
     <IncludeInVSIX>true</IncludeInVSIX>

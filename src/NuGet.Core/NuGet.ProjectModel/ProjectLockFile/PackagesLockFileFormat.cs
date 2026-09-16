@@ -12,10 +12,13 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NuGet.Common;
 using NuGet.Frameworks;
+using NuGet.Packaging.Core;
 using NuGet.Shared;
 using NuGet.Versioning;
 
@@ -38,6 +41,15 @@ namespace NuGet.ProjectModel
         private const string DependenciesProperty = "dependencies";
         private const string TypeProperty = "type";
         private const string FrameworkProperty = "framework";
+        private static readonly JsonWriterOptions WriterOptions = new()
+        {
+            Encoder = NewtonsoftCompatibleJavaScriptEncoder.Instance,
+            Indented = true,
+#if NET9_0_OR_GREATER
+            // Match Newtonsoft.Json's platform-specific newline behavior.
+            NewLine = Environment.NewLine
+#endif
+        };
 
         public static PackagesLockFile Parse(string lockFileContent, string path)
         {
@@ -170,10 +182,22 @@ namespace NuGet.ProjectModel
 
         public static string Render(PackagesLockFile lockFile)
         {
-            using (var writer = new StringWriter())
+            ValidatePropertyNames(lockFile);
+
+            if (ContainsInvalidUtf16(lockFile))
             {
-                Write(writer, lockFile);
-                return writer.ToString();
+                using (var writer = new StringWriter())
+                {
+                    Write(writer, lockFile);
+                    return writer.ToString();
+                }
+            }
+
+            using (var stream = new MemoryStream())
+            {
+                WriteToStreamWithoutValidation(stream, lockFile);
+
+                return Encoding.UTF8.GetString(stream.GetBuffer(), 0, checked((int)stream.Length));
             }
         }
 
@@ -191,13 +215,9 @@ namespace NuGet.ProjectModel
 
         public static void Write(Stream stream, PackagesLockFile lockFile)
         {
-#if NET5_0_OR_GREATER
-            using (var textWriter = new StreamWriter(stream))
-#else
-            using (var textWriter = new NoAllocNewLineStreamWriter(stream))
-#endif
+            using (stream)
             {
-                Write(textWriter, lockFile);
+                WriteToStream(stream, lockFile);
             }
         }
 
@@ -213,6 +233,35 @@ namespace NuGet.ProjectModel
 
                 var json = WriteLockFile(lockFile);
                 json.WriteTo(jsonWriter, Array.Empty<JsonConverter>());
+            }
+        }
+
+        private static void WriteToStream(Stream stream, PackagesLockFile lockFile)
+        {
+            ValidatePropertyNames(lockFile);
+
+            if (ContainsInvalidUtf16(lockFile))
+            {
+#if NET5_0_OR_GREATER
+                using (var textWriter = new StreamWriter(stream))
+#else
+                using (var textWriter = new NoAllocNewLineStreamWriter(stream))
+#endif
+                {
+                    Write(textWriter, lockFile);
+                }
+
+                return;
+            }
+
+            WriteToStreamWithoutValidation(stream, lockFile);
+        }
+
+        private static void WriteToStreamWithoutValidation(Stream stream, PackagesLockFile lockFile)
+        {
+            using (var jsonWriter = new Utf8JsonWriter(stream, WriterOptions))
+            {
+                WriteLockFile(jsonWriter, lockFile);
             }
         }
 
@@ -377,6 +426,346 @@ namespace NuGet.ProjectModel
             }
 
             return new JProperty(dependency.Id, json);
+        }
+
+        private static void WriteLockFile(Utf8JsonWriter writer, PackagesLockFile lockFile)
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber(VersionProperty, lockFile.Version);
+
+            if (lockFile.Version >= AliasedVersion)
+            {
+                // V3 format: write targets at root level with framework and dependencies inside
+                foreach (PackagesLockFileTarget target in lockFile.Targets)
+                {
+                    WriteTargetV3(writer, target);
+                }
+            }
+            else
+            {
+                // V1 and V2 format: write targets under dependencies property
+                writer.WritePropertyName(DependenciesProperty);
+                WriteObject(writer, lockFile.Targets, WriteTarget);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        private static void WriteTargetV3(Utf8JsonWriter writer, PackagesLockFileTarget target)
+        {
+            writer.WritePropertyName(target.Name);
+            writer.WriteStartObject();
+            writer.WriteString(FrameworkProperty, target.TargetFramework.ToString());
+            writer.WritePropertyName(DependenciesProperty);
+            WriteObject(writer, target.Dependencies, WriteTargetDependency);
+            writer.WriteEndObject();
+        }
+
+        private static void WriteTarget(Utf8JsonWriter writer, PackagesLockFileTarget target)
+        {
+            writer.WritePropertyName(target.Name);
+            WriteObject(writer, target.Dependencies, WriteTargetDependency);
+        }
+
+        private static void WriteTargetDependency(Utf8JsonWriter writer, LockFileDependency dependency)
+        {
+            writer.WritePropertyName(dependency.Id);
+            writer.WriteStartObject();
+            writer.WriteString(TypeProperty, dependency.Type.ToString());
+
+            string requestedVersion = GetRequestedVersion(dependency);
+            if (requestedVersion != null)
+            {
+                writer.WriteString(RequestedProperty, requestedVersion);
+            }
+
+            string resolvedVersion = GetResolvedVersion(dependency);
+            if (resolvedVersion != null)
+            {
+                writer.WriteString(ResolvedProperty, resolvedVersion);
+            }
+
+            if (dependency.ContentHash != null)
+            {
+                writer.WriteString(ContentHashProperty, dependency.ContentHash);
+            }
+
+            if (dependency.Dependencies?.Count > 0)
+            {
+                IEnumerable<PackageDependency> orderedDependencies = dependency.Dependencies.OrderBy(
+                    dependency => dependency.Id,
+                    StringComparer.Ordinal);
+
+                writer.WritePropertyName(DependenciesProperty);
+                writer.WriteStartObject();
+
+                foreach (PackageDependency packageDependency in orderedDependencies)
+                {
+                    writer.WritePropertyName(packageDependency.Id);
+                    string versionRange = GetDependencyVersionRange(dependency, packageDependency);
+
+                    if (versionRange == null)
+                    {
+                        writer.WriteNullValue();
+                    }
+                    else
+                    {
+                        writer.WriteStringValue(versionRange);
+                    }
+                }
+
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndObject();
+        }
+
+        private static void WriteObject<T>(
+            Utf8JsonWriter writer,
+            IEnumerable<T> items,
+            Action<Utf8JsonWriter, T> writeItem)
+        {
+            writer.WriteStartObject();
+
+            foreach (T item in items)
+            {
+                writeItem(writer, item);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        private static void ValidatePropertyNames(PackagesLockFile lockFile)
+        {
+            var targetNames = new HashSet<string>(StringComparer.Ordinal);
+            if (lockFile.Version >= AliasedVersion)
+            {
+                targetNames.Add(VersionProperty);
+            }
+
+            foreach (PackagesLockFileTarget target in lockFile.Targets)
+            {
+                if (target == null)
+                {
+                    ThrowNullPropertyName();
+                }
+
+                AddPropertyName(targetNames, target.Name);
+
+                var packageIds = new HashSet<string>(StringComparer.Ordinal);
+                foreach (LockFileDependency dependency in target.Dependencies)
+                {
+                    if (dependency == null)
+                    {
+                        ThrowNullPropertyName();
+                    }
+
+                    AddPropertyName(packageIds, dependency.Id);
+
+                    if (dependency.Dependencies?.Count > 0)
+                    {
+                        var dependencyIds = new HashSet<string>(StringComparer.Ordinal);
+                        foreach (PackageDependency packageDependency in dependency.Dependencies)
+                        {
+                            if (packageDependency == null)
+                            {
+                                ThrowNullPropertyName();
+                            }
+
+                            AddPropertyName(dependencyIds, packageDependency.Id);
+                        }
+                    }
+                }
+            }
+        }
+
+        private static void AddPropertyName(HashSet<string> propertyNames, string propertyName)
+        {
+            if (propertyName == null)
+            {
+                ThrowNullPropertyName();
+            }
+
+            if (!propertyNames.Add(propertyName))
+            {
+                throw new ArgumentException(
+                    $"Duplicate JSON property name '{propertyName}' in packages lock file.",
+                    nameof(propertyName));
+            }
+        }
+
+        private static void ThrowNullPropertyName()
+        {
+            throw new ArgumentNullException(
+                "name",
+                "JSON property names cannot be null in packages lock file.");
+        }
+
+        private static bool ContainsInvalidUtf16(PackagesLockFile lockFile)
+        {
+            foreach (string value in GetSerializedStrings(lockFile))
+            {
+                if (ContainsInvalidUtf16(value))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static IEnumerable<string> GetSerializedStrings(PackagesLockFile lockFile)
+        {
+            foreach (PackagesLockFileTarget target in lockFile.Targets)
+            {
+                yield return target.Name;
+                yield return target.TargetFramework.ToString();
+
+                foreach (LockFileDependency dependency in target.Dependencies)
+                {
+                    yield return dependency.Id;
+                    yield return dependency.Type.ToString();
+                    yield return GetRequestedVersion(dependency);
+                    yield return GetResolvedVersion(dependency);
+                    yield return dependency.ContentHash;
+
+                    if (dependency.Dependencies?.Count > 0)
+                    {
+                        foreach (PackageDependency packageDependency in dependency.Dependencies)
+                        {
+                            yield return packageDependency.Id;
+                            yield return GetDependencyVersionRange(dependency, packageDependency);
+                        }
+                    }
+                }
+            }
+        }
+
+        private static string GetRequestedVersion(LockFileDependency dependency)
+        {
+            return dependency.RequestedVersion?.ToNormalizedString();
+        }
+
+        private static string GetResolvedVersion(LockFileDependency dependency)
+        {
+            return dependency.ResolvedVersion?.ToNormalizedString();
+        }
+
+        private static string GetDependencyVersionRange(
+            LockFileDependency dependency,
+            PackageDependency packageDependency)
+        {
+            return dependency.Type == PackageDependencyType.Project
+                ? packageDependency.VersionRange?.ToString()
+                : packageDependency.VersionRange?.ToNonSnapshotRange().ToLegacyShortString();
+        }
+
+        private static bool ContainsInvalidUtf16(string value)
+        {
+            if (value == null)
+            {
+                return false;
+            }
+
+            for (int index = 0; index < value.Length; index++)
+            {
+                char character = value[index];
+                if (char.IsHighSurrogate(character))
+                {
+                    if (index + 1 >= value.Length || !char.IsLowSurrogate(value[index + 1]))
+                    {
+                        return true;
+                    }
+
+                    index++;
+                }
+                else if (char.IsLowSurrogate(character))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private sealed class NewtonsoftCompatibleJavaScriptEncoder : JavaScriptEncoder
+        {
+            internal static readonly NewtonsoftCompatibleJavaScriptEncoder Instance = new();
+
+            public override int MaxOutputCharactersPerInputCharacter => 6;
+
+            public override unsafe int FindFirstCharacterToEncode(char* text, int textLength)
+            {
+                for (int index = 0; index < textLength; index++)
+                {
+                    if (WillEncode(text[index]))
+                    {
+                        return index;
+                    }
+                }
+
+                return -1;
+            }
+
+            public override bool WillEncode(int unicodeScalar)
+            {
+                return unicodeScalar < ' '
+                    || unicodeScalar == '"'
+                    || unicodeScalar == '\\'
+                    || unicodeScalar == 0x85
+                    || unicodeScalar == 0x2028
+                    || unicodeScalar == 0x2029
+                    || unicodeScalar > 0x10FFFF;
+            }
+
+            public override unsafe bool TryEncodeUnicodeScalar(
+                int unicodeScalar,
+                char* buffer,
+                int bufferLength,
+                out int numberOfCharactersWritten)
+            {
+                char escapedCharacter = unicodeScalar switch
+                {
+                    '\b' => 'b',
+                    '\t' => 't',
+                    '\n' => 'n',
+                    '\f' => 'f',
+                    '\r' => 'r',
+                    '"' => '"',
+                    '\\' => '\\',
+                    _ => '\0'
+                };
+
+                if (escapedCharacter != '\0')
+                {
+                    if (bufferLength < 2)
+                    {
+                        numberOfCharactersWritten = 0;
+                        return false;
+                    }
+
+                    buffer[0] = '\\';
+                    buffer[1] = escapedCharacter;
+                    numberOfCharactersWritten = 2;
+                    return true;
+                }
+
+                if (bufferLength < 6)
+                {
+                    numberOfCharactersWritten = 0;
+                    return false;
+                }
+
+                const string HexadecimalDigits = "0123456789abcdef";
+                buffer[0] = '\\';
+                buffer[1] = 'u';
+                buffer[2] = HexadecimalDigits[(unicodeScalar >> 12) & 0xf];
+                buffer[3] = HexadecimalDigits[(unicodeScalar >> 8) & 0xf];
+                buffer[4] = HexadecimalDigits[(unicodeScalar >> 4) & 0xf];
+                buffer[5] = HexadecimalDigits[unicodeScalar & 0xf];
+                numberOfCharactersWritten = 6;
+                return true;
+            }
         }
 
     }

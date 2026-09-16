@@ -7,8 +7,11 @@ using System.IO;
 using System.Text;
 using Microsoft.Build.Framework;
 using Microsoft.Build.NuGetSdkResolver;
+using NuGet.Frameworks;
+using NuGet.Packaging.Core;
 using NuGet.ProjectModel;
 using NuGet.RuntimeModel;
+using NuGet.Versioning;
 
 if (!AppContext.TryGetSwitch("NuGet.UseSystemTextJsonDeserialization", out bool isEnabled) || !isEnabled)
 {
@@ -162,6 +165,49 @@ try
         packageA.Dependencies[0].VersionRange?.MinVersion?.ToNormalizedString() != "2.0.0")
     {
         Console.Error.WriteLine("Package lock file dependency was not parsed.");
+        return 1;
+    }
+
+    var writerLockFile = new PackagesLockFile(PackagesLockFileFormat.PackagesLockFileVersion);
+    var writerTarget = new PackagesLockFileTarget
+    {
+        TargetAlias = "net10.0",
+        TargetFramework = NuGetFramework.Parse("net10.0")
+    };
+    var writerDependency = new LockFileDependency
+    {
+        Id = "Package.Direct",
+        Type = PackageDependencyType.Direct,
+        RequestedVersion = VersionRange.Parse("[1.0.0, 2.0.0)"),
+        ResolvedVersion = NuGetVersion.Parse("1.2.3"),
+        ContentHash = "café<&"
+    };
+    writerDependency.Dependencies.Add(new PackageDependency(
+        "Package.Transitive",
+        VersionRange.Parse("[2.0.0, )")));
+    writerTarget.Dependencies.Add(writerDependency);
+    writerLockFile.Targets.Add(writerTarget);
+
+    string renderedOutput = PackagesLockFileFormat.Render(writerLockFile);
+
+    var writerStream = new MemoryStream();
+    PackagesLockFileFormat.Write(writerStream, writerLockFile);
+    string streamOutput = Encoding.UTF8.GetString(writerStream.ToArray());
+
+    string lockFileOutputPath = Path.Combine(testDirectory, "writer", PackagesLockFileFormat.LockFileName);
+    PackagesLockFileFormat.Write(lockFileOutputPath, writerLockFile);
+    string fileOutput = File.ReadAllText(lockFileOutputPath);
+
+    if (!string.Equals(renderedOutput, streamOutput, StringComparison.Ordinal)
+        || !string.Equals(renderedOutput, fileOutput, StringComparison.Ordinal)
+        || !renderedOutput.Contains("\"version\": 3", StringComparison.Ordinal)
+        || !renderedOutput.Contains("\"net10.0\": {", StringComparison.Ordinal)
+        || !renderedOutput.Contains("\"Package.Direct\": {", StringComparison.Ordinal)
+        || !renderedOutput.Contains("\"resolved\": \"1.2.3\"", StringComparison.Ordinal)
+        || !renderedOutput.Contains("\"contentHash\": \"café<&\"", StringComparison.Ordinal)
+        || !renderedOutput.Contains("\"Package.Transitive\":", StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("Package lock file writer output did not match.");
         return 1;
     }
 
