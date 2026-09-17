@@ -136,6 +136,11 @@ try
     {
         return 1;
     }
+
+    if (RunAssetsLockWriterSmoke(testDirectory) != 0)
+    {
+        return 1;
+    }
 }
 finally
 {
@@ -192,6 +197,73 @@ static int RunPackageLockWriterSmoke(string testDirectory)
         Console.Error.WriteLine("Package lock file writer output did not match.");
         return 1;
     }
+    return 0;
+}
+
+static int RunAssetsLockWriterSmoke(string testDirectory)
+{
+    var lockFile = new LockFile
+    {
+        Version = LockFileFormat.Version,
+        PackageSpec = new PackageSpec(new[]
+        {
+            new TargetFrameworkInformation
+            {
+                FrameworkName = NuGetFramework.Parse("net10.0"),
+                TargetAlias = "net10.0"
+            }
+        })
+    };
+    var targetLibrary = new LockFileTargetLibrary
+    {
+        Name = "Package.Direct",
+        Version = NuGetVersion.Parse("1.2.3"),
+        Type = "package"
+    };
+    targetLibrary.Dependencies.Add(new PackageDependency(
+        "Package.Transitive",
+        VersionRange.Parse("[2.0.0, )")));
+    targetLibrary.CompileTimeAssemblies.Add(new LockFileItem("lib/net10.0/Package.Direct.dll"));
+    lockFile.Targets.Add(new LockFileTarget
+    {
+        TargetFramework = NuGetFramework.Parse("net10.0"),
+        TargetAlias = "net10.0",
+        Libraries = new[] { targetLibrary }
+    });
+    lockFile.Libraries.Add(new LockFileLibrary
+    {
+        Name = "Package.Direct",
+        Version = NuGetVersion.Parse("1.2.3"),
+        Type = "package",
+        Sha512 = "café<&",
+        Files = new[] { "lib/net10.0/Package.Direct.dll" }
+    });
+    lockFile.ProjectFileDependencyGroups.Add(
+        new ProjectFileDependencyGroup("net10.0", new[] { "Package.Direct >= 1.2.3" }));
+
+    var format = new LockFileFormat();
+    string renderedOutput = format.Render(lockFile);
+
+    var stream = new MemoryStream();
+    format.Write(stream, lockFile);
+    string streamOutput = Encoding.UTF8.GetString(stream.ToArray());
+
+    string outputPath = Path.Combine(testDirectory, "writer", LockFileFormat.AssetsFileName);
+    format.Write(outputPath, lockFile);
+    string fileOutput = File.ReadAllText(outputPath);
+
+    if (!string.Equals(renderedOutput, streamOutput, StringComparison.Ordinal)
+        || !string.Equals(renderedOutput, fileOutput, StringComparison.Ordinal)
+        || !renderedOutput.Contains("\"version\": 4", StringComparison.Ordinal)
+        || !renderedOutput.Contains("\"targets\": {", StringComparison.Ordinal)
+        || !renderedOutput.Contains("\"Package.Direct/1.2.3\": {", StringComparison.Ordinal)
+        || !renderedOutput.Contains("\"sha512\": \"café<&\"", StringComparison.Ordinal)
+        || !renderedOutput.Contains("\"project\": {", StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("Assets lock file writer output did not match.");
+        return 1;
+    }
+
     return 0;
 }
 

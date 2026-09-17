@@ -15,7 +15,7 @@ using NuGet.RuntimeModel;
 
 namespace NuGet.ProjectModel
 {
-    public class LockFileFormat
+    public partial class LockFileFormat
     {
         public static readonly int Version = 4;
 
@@ -121,15 +121,13 @@ namespace NuGet.ProjectModel
             }
         }
 
+#pragma warning disable CA1822 // Mark members as static - public API
         public void Write(Stream stream, LockFile lockFile)
+#pragma warning restore CA1822 // Mark members as static
         {
-#if NET5_0_OR_GREATER
-            using (var textWriter = new StreamWriter(stream))
-#else
-            using (var textWriter = new NoAllocNewLineStreamWriter(stream))
-#endif
+            using (stream)
             {
-                Write(textWriter, lockFile);
+                WriteToStream(stream, lockFile);
             }
         }
 
@@ -144,12 +142,14 @@ namespace NuGet.ProjectModel
             }
         }
 
+#pragma warning disable CA1822 // Mark members as static
         public string Render(LockFile lockFile)
+#pragma warning restore CA1822 // Mark members as static
         {
-            using (var writer = new StringWriter())
+            using (var stream = new MemoryStream())
             {
-                Write(writer, lockFile);
-                return writer.ToString();
+                WriteToStream(stream, lockFile);
+                return Encoding.UTF8.GetString(stream.GetBuffer(), 0, checked((int)stream.Length));
             }
         }
 
@@ -578,5 +578,6 @@ namespace NuGet.ProjectModel
 
             writer.WriteObjectEnd();
         }
+
     }
 }
