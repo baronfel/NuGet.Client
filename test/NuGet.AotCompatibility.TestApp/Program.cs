@@ -211,6 +211,68 @@ try
         return 1;
     }
 
+    var assetsLockFile = new LockFile
+    {
+        Version = LockFileFormat.Version,
+        PackageSpec = new PackageSpec(new[]
+        {
+            new TargetFrameworkInformation
+            {
+                FrameworkName = NuGetFramework.Parse("net10.0"),
+                TargetAlias = "net10.0"
+            }
+        })
+    };
+    var assetsTargetLibrary = new LockFileTargetLibrary
+    {
+        Name = "Package.Direct",
+        Version = NuGetVersion.Parse("1.2.3"),
+        Type = "package"
+    };
+    assetsTargetLibrary.Dependencies.Add(new PackageDependency(
+        "Package.Transitive",
+        VersionRange.Parse("[2.0.0, )")));
+    assetsTargetLibrary.CompileTimeAssemblies.Add(new LockFileItem("lib/net10.0/Package.Direct.dll"));
+    assetsLockFile.Targets.Add(new LockFileTarget
+    {
+        TargetFramework = NuGetFramework.Parse("net10.0"),
+        TargetAlias = "net10.0",
+        Libraries = new[] { assetsTargetLibrary }
+    });
+    assetsLockFile.Libraries.Add(new LockFileLibrary
+    {
+        Name = "Package.Direct",
+        Version = NuGetVersion.Parse("1.2.3"),
+        Type = "package",
+        Sha512 = "café<&",
+        Files = new[] { "lib/net10.0/Package.Direct.dll" }
+    });
+    assetsLockFile.ProjectFileDependencyGroups.Add(
+        new ProjectFileDependencyGroup("net10.0", new[] { "Package.Direct >= 1.2.3" }));
+
+    var assetsFormat = new LockFileFormat();
+    string renderedAssetsOutput = assetsFormat.Render(assetsLockFile);
+
+    var assetsStream = new MemoryStream();
+    assetsFormat.Write(assetsStream, assetsLockFile);
+    string assetsStreamOutput = Encoding.UTF8.GetString(assetsStream.ToArray());
+
+    string assetsOutputPath = Path.Combine(testDirectory, "writer", LockFileFormat.AssetsFileName);
+    assetsFormat.Write(assetsOutputPath, assetsLockFile);
+    string assetsFileOutput = File.ReadAllText(assetsOutputPath);
+
+    if (!string.Equals(renderedAssetsOutput, assetsStreamOutput, StringComparison.Ordinal)
+        || !string.Equals(renderedAssetsOutput, assetsFileOutput, StringComparison.Ordinal)
+        || !renderedAssetsOutput.Contains("\"version\": 4", StringComparison.Ordinal)
+        || !renderedAssetsOutput.Contains("\"targets\": {", StringComparison.Ordinal)
+        || !renderedAssetsOutput.Contains("\"Package.Direct/1.2.3\": {", StringComparison.Ordinal)
+        || !renderedAssetsOutput.Contains("\"sha512\": \"café<&\"", StringComparison.Ordinal)
+        || !renderedAssetsOutput.Contains("\"project\": {", StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("Assets lock file writer output did not match.");
+        return 1;
+    }
+
     Console.WriteLine("Passed.");
     return 0;
 }

@@ -12,7 +12,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -41,16 +40,6 @@ namespace NuGet.ProjectModel
         private const string DependenciesProperty = "dependencies";
         private const string TypeProperty = "type";
         private const string FrameworkProperty = "framework";
-        private static readonly JsonWriterOptions WriterOptions = new()
-        {
-            Encoder = NewtonsoftCompatibleJavaScriptEncoder.Instance,
-            Indented = true,
-#if NET9_0_OR_GREATER
-            // Match Newtonsoft.Json's platform-specific newline behavior.
-            NewLine = Environment.NewLine
-#endif
-        };
-
         public static PackagesLockFile Parse(string lockFileContent, string path)
         {
             return Parse(lockFileContent, NullLogger.Instance, path);
@@ -259,7 +248,7 @@ namespace NuGet.ProjectModel
 
         private static void WriteToStreamWithoutValidation(Stream stream, PackagesLockFile lockFile)
         {
-            using (var jsonWriter = new Utf8JsonWriter(stream, WriterOptions))
+            using (var jsonWriter = new Utf8JsonWriter(stream, NewtonsoftJsonCompatibility.WriterOptions))
             {
                 WriteLockFile(jsonWriter, lockFile);
             }
@@ -605,7 +594,7 @@ namespace NuGet.ProjectModel
         {
             foreach (string value in GetSerializedStrings(lockFile))
             {
-                if (ContainsInvalidUtf16(value))
+                if (NewtonsoftJsonCompatibility.ContainsInvalidUtf16(value))
                 {
                     return true;
                 }
@@ -658,114 +647,6 @@ namespace NuGet.ProjectModel
             return dependency.Type == PackageDependencyType.Project
                 ? packageDependency.VersionRange?.ToString()
                 : packageDependency.VersionRange?.ToNonSnapshotRange().ToLegacyShortString();
-        }
-
-        private static bool ContainsInvalidUtf16(string value)
-        {
-            if (value == null)
-            {
-                return false;
-            }
-
-            for (int index = 0; index < value.Length; index++)
-            {
-                char character = value[index];
-                if (char.IsHighSurrogate(character))
-                {
-                    if (index + 1 >= value.Length || !char.IsLowSurrogate(value[index + 1]))
-                    {
-                        return true;
-                    }
-
-                    index++;
-                }
-                else if (char.IsLowSurrogate(character))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private sealed class NewtonsoftCompatibleJavaScriptEncoder : JavaScriptEncoder
-        {
-            internal static readonly NewtonsoftCompatibleJavaScriptEncoder Instance = new();
-
-            public override int MaxOutputCharactersPerInputCharacter => 6;
-
-            public override unsafe int FindFirstCharacterToEncode(char* text, int textLength)
-            {
-                for (int index = 0; index < textLength; index++)
-                {
-                    if (WillEncode(text[index]))
-                    {
-                        return index;
-                    }
-                }
-
-                return -1;
-            }
-
-            public override bool WillEncode(int unicodeScalar)
-            {
-                return unicodeScalar < ' '
-                    || unicodeScalar == '"'
-                    || unicodeScalar == '\\'
-                    || unicodeScalar == 0x85
-                    || unicodeScalar == 0x2028
-                    || unicodeScalar == 0x2029
-                    || unicodeScalar > 0x10FFFF;
-            }
-
-            public override unsafe bool TryEncodeUnicodeScalar(
-                int unicodeScalar,
-                char* buffer,
-                int bufferLength,
-                out int numberOfCharactersWritten)
-            {
-                char escapedCharacter = unicodeScalar switch
-                {
-                    '\b' => 'b',
-                    '\t' => 't',
-                    '\n' => 'n',
-                    '\f' => 'f',
-                    '\r' => 'r',
-                    '"' => '"',
-                    '\\' => '\\',
-                    _ => '\0'
-                };
-
-                if (escapedCharacter != '\0')
-                {
-                    if (bufferLength < 2)
-                    {
-                        numberOfCharactersWritten = 0;
-                        return false;
-                    }
-
-                    buffer[0] = '\\';
-                    buffer[1] = escapedCharacter;
-                    numberOfCharactersWritten = 2;
-                    return true;
-                }
-
-                if (bufferLength < 6)
-                {
-                    numberOfCharactersWritten = 0;
-                    return false;
-                }
-
-                const string HexadecimalDigits = "0123456789abcdef";
-                buffer[0] = '\\';
-                buffer[1] = 'u';
-                buffer[2] = HexadecimalDigits[(unicodeScalar >> 12) & 0xf];
-                buffer[3] = HexadecimalDigits[(unicodeScalar >> 8) & 0xf];
-                buffer[4] = HexadecimalDigits[(unicodeScalar >> 4) & 0xf];
-                buffer[5] = HexadecimalDigits[unicodeScalar & 0xf];
-                numberOfCharactersWritten = 6;
-                return true;
-            }
         }
 
     }

@@ -366,6 +366,74 @@ namespace NuGet.ProjectModel.Test
         }
 
         [Fact]
+        public void LockFileFormat_WritePublicApis_PreserveNewtonsoftOutput()
+        {
+            LockFile lockFile = CreateLockFileForWriter("café<&");
+            var format = new LockFileFormat();
+            var legacyWriter = new StringWriter();
+            format.Write(legacyWriter, lockFile);
+            string expected = legacyWriter.ToString();
+            string filePath = Path.GetTempFileName();
+
+            try
+            {
+                string renderedOutput = format.Render(lockFile);
+
+                var stream = new MemoryStream();
+                format.Write(stream, lockFile);
+                string streamOutput = Encoding.UTF8.GetString(stream.ToArray());
+
+                format.Write(filePath, lockFile);
+                string fileOutput = File.ReadAllText(filePath);
+
+                Assert.Equal(expected, renderedOutput);
+                Assert.Equal(expected, streamOutput);
+                Assert.Equal(expected, fileOutput);
+                Assert.False(stream.CanWrite);
+            }
+            finally
+            {
+                File.Delete(filePath);
+            }
+        }
+
+        [Fact]
+        public void LockFileFormat_WriteTextWriter_UsesLegacyNewtonsoftWriter()
+        {
+            LockFile lockFile = CreateLockFileForWriter("café<&");
+            var writer = new StringWriter();
+
+            // This shipped overload intentionally remains the Newtonsoft compatibility path.
+            new LockFileFormat().Write(writer, lockFile);
+
+            Assert.Contains(@"""sha512"": ""café<&""", writer.ToString());
+        }
+
+        // Newtonsoft emits ordinary Unicode and HTML-sensitive characters verbatim,
+        // uses lowercase escapes for controls and separators, and JSON-escapes quotes and backslashes.
+        [Theory]
+        [InlineData("emoji-\U0001F600")]
+        [InlineData("delete-\u007F")]
+        [InlineData("next-line-\u0085")]
+        [InlineData("line-separator-\u2028")]
+        [InlineData("paragraph-separator-\u2029")]
+        [InlineData("controls-\u0000\u0001\b\t\n\f\r\u001F")]
+        [InlineData("Latin-café-Ångström")]
+        [InlineData("html-<>&'")]
+        [InlineData("quote-\"-backslash-\\")]
+        public void LockFileFormat_WriteEscaping_MatchesNewtonsoft(string value)
+        {
+            LockFile lockFile = CreateLockFileForWriter(value);
+            var format = new LockFileFormat();
+            var legacyWriter = new StringWriter();
+            format.Write(legacyWriter, lockFile);
+
+            string output = format.Render(lockFile);
+
+            Assert.Equal(legacyWriter.ToString(), output);
+        }
+
+        [Fact]
         public void LockFileFormat_WithAnalyzerAssets_WritesAndReadsAnalyzerAssets()
         {
             // Arrange
@@ -2695,6 +2763,61 @@ namespace NuGet.ProjectModel.Test
             {
                 return LockFileFormat.Read(stream, logger ?? NullLogger.Instance, path, flags);
             }
+        }
+
+        private static LockFile CreateLockFileForWriter(string value)
+        {
+            var targetLibrary = new LockFileTargetLibrary
+            {
+                Name = $"Package-{value}",
+                Version = NuGetVersion.Parse("1.2.3"),
+                Type = "package",
+                Framework = value
+            };
+            targetLibrary.Dependencies.Add(new PackageDependency(
+                $"Dependency-{value}",
+                VersionRange.Parse("[2.0.0, )")));
+            var compileItem = new LockFileItem($"ref/{value}.dll");
+            compileItem.Properties["metadata"] = value;
+            targetLibrary.CompileTimeAssemblies.Add(compileItem);
+
+            var lockFile = new LockFile
+            {
+                Version = LockFileFormat.Version,
+                PackageSpec = new PackageSpec(new[]
+                {
+                    new TargetFrameworkInformation
+                    {
+                        FrameworkName = FrameworkConstants.CommonFrameworks.Net80,
+                        TargetAlias = "net8.0"
+                    }
+                })
+                {
+                    RestoreMetadata = new ProjectRestoreMetadata
+                    {
+                        ProjectUniqueName = value
+                    }
+                }
+            };
+            lockFile.Targets.Add(new LockFileTarget
+            {
+                Name = $"net8.0-{value}",
+                TargetFramework = FrameworkConstants.CommonFrameworks.Net80,
+                Libraries = new[] { targetLibrary }
+            });
+            lockFile.Libraries.Add(new LockFileLibrary
+            {
+                Name = $"Package-{value}",
+                Version = NuGetVersion.Parse("1.2.3"),
+                Type = "package",
+                Sha512 = value,
+                Files = ImmutableArray.Create($"lib/{value}.dll")
+            });
+            lockFile.ProjectFileDependencyGroups.Add(
+                new ProjectFileDependencyGroup($"net8.0-{value}", new[] { $"Package-{value} >= 1.2.3" }));
+            lockFile.PackageFolders.Add(new LockFileItem($"packages/{value}/"));
+
+            return lockFile;
         }
     }
 }
