@@ -82,6 +82,8 @@ namespace NuGet.ProjectModel
             Indented = true
         };
 
+        // The legacy Newtonsoft writer uses the string constants above. These compiler-backed UTF-8 literals
+        // let the native writer avoid encoding property names and allocating byte arrays on each write.
         private static ReadOnlySpan<byte> VersionPropertyUtf8 => "version"u8;
         private static ReadOnlySpan<byte> LibrariesPropertyUtf8 => "libraries"u8;
         private static ReadOnlySpan<byte> TargetsPropertyUtf8 => "targets"u8;
