@@ -10,7 +10,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using Newtonsoft.Json;
 using NuGet.Common;
 using NuGet.Packaging;
 using NuGet.Shared;
@@ -341,16 +340,15 @@ namespace NuGet.ProjectModel
 
         public void Save(Stream stream)
         {
-#if NET5_0_OR_GREATER
-            using (var textWriter = new StreamWriter(stream))
-#else
-            using (var textWriter = new NoAllocNewLineStreamWriter(stream))
-#endif
-            using (var jsonWriter = new JsonTextWriter(textWriter))
-            using (var writer = new RuntimeModel.JsonObjectWriter(jsonWriter))
+            if (stream == null)
             {
-                jsonWriter.Formatting = Formatting.Indented;
+                throw new ArgumentNullException(nameof(stream));
+            }
 
+            using (stream)
+            using (var jsonWriter = new Utf8JsonWriter(stream, NewtonsoftJsonCompatibility.WriterOptions))
+            {
+                var writer = new Utf8JsonObjectWriter(jsonWriter);
                 Write(writer, hashing: false, PackageSpecWriter.Write);
             }
         }

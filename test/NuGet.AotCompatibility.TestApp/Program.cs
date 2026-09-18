@@ -141,6 +141,11 @@ try
     {
         return 1;
     }
+
+    if (RunDependencyGraphSpecWriterSmoke(testDirectory, projectDirectory) != 0)
+    {
+        return 1;
+    }
 }
 finally
 {
@@ -261,6 +266,48 @@ static int RunAssetsLockWriterSmoke(string testDirectory)
         || !renderedOutput.Contains("\"project\": {", StringComparison.Ordinal))
     {
         Console.Error.WriteLine("Assets lock file writer output did not match.");
+        return 1;
+    }
+
+    return 0;
+}
+
+static int RunDependencyGraphSpecWriterSmoke(string testDirectory, string projectDirectory)
+{
+    const string dependencyGraphProjectName = "Aot.Project-café-<&-\U0001F600";
+    var dependencyGraphSpec = new DependencyGraphSpec();
+    dependencyGraphSpec.AddRestore(dependencyGraphProjectName);
+    dependencyGraphSpec.AddProject(new PackageSpec
+    {
+        Name = dependencyGraphProjectName,
+        RestoreMetadata = new ProjectRestoreMetadata
+        {
+            ProjectName = dependencyGraphProjectName,
+            ProjectPath = Path.Combine(projectDirectory, "Aot.Project.csproj"),
+            ProjectUniqueName = dependencyGraphProjectName,
+            ProjectStyle = ProjectStyle.PackageReference
+        }
+    });
+
+    var dependencyGraphStream = new MemoryStream();
+    dependencyGraphSpec.Save(dependencyGraphStream);
+    string dependencyGraphStreamOutput = Encoding.UTF8.GetString(dependencyGraphStream.ToArray());
+
+    string dependencyGraphOutputPath = Path.Combine(testDirectory, "writer", "Aot.Project.nuget.dgspec.json");
+    dependencyGraphSpec.Save(dependencyGraphOutputPath);
+    string dependencyGraphFileOutput = File.ReadAllText(dependencyGraphOutputPath);
+    string dependencyGraphHash = dependencyGraphSpec.GetHash();
+    string repeatedDependencyGraphHash = dependencyGraphSpec.GetHash();
+
+    if (!string.Equals(dependencyGraphStreamOutput, dependencyGraphFileOutput, StringComparison.Ordinal)
+        || !dependencyGraphStreamOutput.Contains("\"format\": 1", StringComparison.Ordinal)
+        || !dependencyGraphStreamOutput.Contains($"\"{dependencyGraphProjectName}\": {{", StringComparison.Ordinal)
+        || !dependencyGraphStreamOutput.Contains($"\"projectUniqueName\": \"{dependencyGraphProjectName}\"", StringComparison.Ordinal)
+        || string.IsNullOrEmpty(dependencyGraphHash)
+        || !string.Equals(dependencyGraphHash, repeatedDependencyGraphHash, StringComparison.Ordinal)
+        || dependencyGraphStream.CanWrite)
+    {
+        Console.Error.WriteLine("Dependency graph writer output did not match.");
         return 1;
     }
 

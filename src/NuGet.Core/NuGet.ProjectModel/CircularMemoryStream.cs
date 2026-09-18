@@ -48,13 +48,31 @@ namespace NuGet.ProjectModel
             {
                 var bytesToWrite = Math.Min(_buffer.Length - (int)Position, count - bytesWritten);
 
-                base.Write(buffer, offset, bytesToWrite);
+                base.Write(buffer, offset + bytesWritten, bytesToWrite);
 
                 bytesWritten += bytesToWrite;
 
                 FlushIfFull();
             }
         }
+
+#if NET5_0_OR_GREATER
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            var bytesWritten = 0;
+
+            while (bytesWritten < buffer.Length)
+            {
+                var bytesToWrite = Math.Min(_buffer.Length - (int)Position, buffer.Length - bytesWritten);
+
+                base.Write(buffer.Slice(bytesWritten, bytesToWrite));
+
+                bytesWritten += bytesToWrite;
+
+                FlushIfFull();
+            }
+        }
+#endif
 
         public override void WriteByte(byte value)
         {
