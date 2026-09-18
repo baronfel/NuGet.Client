@@ -20,6 +20,11 @@ if (RunAssetsLockWriterSmoke() != 0)
     return 2;
 }
 
+if (RunDependencyGraphSpecWriterSmoke() != 0)
+{
+    return 3;
+}
+
 Console.WriteLine("Passed.");
 return 0;
 
@@ -113,4 +118,74 @@ static bool IsValidAssetsLockOutput(string output)
             .GetProperty("sha512")
             .GetString() == "café<&"
         && root.TryGetProperty("project", out _);
+}
+
+static int RunDependencyGraphSpecWriterSmoke()
+{
+    const string projectName = "Aot.Project-café-<&-\U0001F600";
+    var dependencyGraphSpec = new DependencyGraphSpec();
+    dependencyGraphSpec.AddRestore(projectName);
+    dependencyGraphSpec.AddProject(new PackageSpec
+    {
+        Name = projectName,
+        RestoreMetadata = new ProjectRestoreMetadata
+        {
+            ProjectName = projectName,
+            ProjectPath = Path.Combine("src", "Aot.Project.csproj"),
+            ProjectUniqueName = projectName,
+            ProjectStyle = ProjectStyle.PackageReference
+        }
+    });
+
+    var stream = new MemoryStream();
+    dependencyGraphSpec.Save(stream);
+    string streamOutput = Encoding.UTF8.GetString(stream.ToArray());
+
+    string outputDirectory = Path.Combine(
+        Path.GetTempPath(),
+        $"NuGet.AotCompatibility.{Guid.NewGuid():N}");
+    string outputPath = Path.Combine(outputDirectory, "Aot.Project.nuget.dgspec.json");
+    string fileOutput;
+    try
+    {
+        Directory.CreateDirectory(outputDirectory);
+        dependencyGraphSpec.Save(outputPath);
+        fileOutput = File.ReadAllText(outputPath);
+    }
+    finally
+    {
+        if (Directory.Exists(outputDirectory))
+        {
+            Directory.Delete(outputDirectory, recursive: true);
+        }
+    }
+
+    string hash = dependencyGraphSpec.GetHash();
+    string repeatedHash = dependencyGraphSpec.GetHash();
+
+    if (!IsValidDependencyGraphOutput(streamOutput, projectName)
+        || !IsValidDependencyGraphOutput(fileOutput, projectName)
+        || string.IsNullOrEmpty(hash)
+        || !string.Equals(hash, repeatedHash, StringComparison.Ordinal)
+        || stream.CanWrite)
+    {
+        Console.Error.WriteLine("Dependency graph writer output did not match.");
+        return 1;
+    }
+
+    return 0;
+}
+
+static bool IsValidDependencyGraphOutput(string output, string projectName)
+{
+    using JsonDocument document = JsonDocument.Parse(output);
+    JsonElement root = document.RootElement;
+
+    return root.GetProperty("format").GetInt32() == 1
+        && root.GetProperty("restore").TryGetProperty(projectName, out _)
+        && root.GetProperty("projects")
+            .GetProperty(projectName)
+            .GetProperty("restore")
+            .GetProperty("projectUniqueName")
+            .GetString() == projectName;
 }
