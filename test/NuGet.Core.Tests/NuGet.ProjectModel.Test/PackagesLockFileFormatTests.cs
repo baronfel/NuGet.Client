@@ -639,14 +639,12 @@ namespace NuGet.ProjectModel.Test
         }
 
         [Fact]
-        public void PackagesLockFileFormat_WriteMalformedUtf16_MatchesNewtonsoft()
+        public void PackagesLockFileFormat_RenderMalformedUtf16_MatchesNewtonsoft()
         {
-            // Newtonsoft preserves malformed UTF-16 in TextWriter output and throws from its strict
-            // UTF-8 StreamWriter after producing the historical partial byte sequence.
             foreach (string malformedText in GetMalformedUtf16Values())
             {
                 PackagesLockFile lockFile = CreateLockFileWithValue(malformedText);
-                AssertMalformedUtf16MatchesNewtonsoft(lockFile);
+                AssertMalformedUtf16RenderMatchesNewtonsoft(lockFile);
             }
         }
 
@@ -655,13 +653,29 @@ namespace NuGet.ProjectModel.Test
         [InlineData("resolved")]
         [InlineData("projectDependency")]
         [InlineData("packageDependency")]
-        public void PackagesLockFileFormat_WriteMalformedVersionStrings_MatchNewtonsoft(string field)
+        public void PackagesLockFileFormat_RenderMalformedVersionStrings_MatchNewtonsoft(string field)
         {
             // Version formatters can preserve lone surrogate code units in release labels.
             foreach (string malformedText in GetMalformedUtf16Values())
             {
                 PackagesLockFile lockFile = CreateLockFileWithMalformedVersion(field, malformedText);
-                AssertMalformedUtf16MatchesNewtonsoft(lockFile);
+                AssertMalformedUtf16RenderMatchesNewtonsoft(lockFile);
+            }
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_WriteMalformedUtf16_DoesNotUseTextWriterFallback()
+        {
+            foreach (string malformedText in GetMalformedUtf16Values())
+            {
+                PackagesLockFile lockFile = CreateLockFileWithValue(malformedText);
+                var stream = new MemoryStream();
+
+                PackagesLockFileFormat.Write(stream, lockFile);
+                string actual = Encoding.UTF8.GetString(stream.ToArray());
+
+                Assert.NotNull(JObject.Parse(actual));
+                Assert.False(stream.CanWrite);
             }
         }
 
@@ -1176,22 +1190,14 @@ namespace NuGet.ProjectModel.Test
             return lockFile;
         }
 
-        private static void AssertMalformedUtf16MatchesNewtonsoft(PackagesLockFile lockFile)
+        private static void AssertMalformedUtf16RenderMatchesNewtonsoft(PackagesLockFile lockFile)
         {
             var legacyWriter = new StringWriter();
             PackagesLockFileFormat.Write(legacyWriter, lockFile);
-            (Exception expectedException, byte[] expectedBytes) = WriteWithNewtonsoftToStream(lockFile);
 
             string renderedOutput = PackagesLockFileFormat.Render(lockFile);
 
-            var stream = new MemoryStream();
-            Exception actualException = Record.Exception(() => PackagesLockFileFormat.Write(stream, lockFile));
-
             Assert.Equal(legacyWriter.ToString(), renderedOutput);
-            Assert.Equal(expectedException.GetType(), actualException.GetType());
-            Assert.Equal(expectedException.Message, actualException.Message);
-            Assert.Equal(expectedBytes, stream.ToArray());
-            Assert.False(stream.CanWrite);
         }
 
         private static IEnumerable<string> GetMalformedUtf16Values()
@@ -1201,23 +1207,5 @@ namespace NuGet.ProjectModel.Test
             yield return "\uD800x";
         }
 
-        private static (Exception Exception, byte[] Bytes) WriteWithNewtonsoftToStream(PackagesLockFile lockFile)
-        {
-            var stream = new MemoryStream();
-            Exception exception = Record.Exception(() =>
-            {
-#if NET5_0_OR_GREATER
-                using (var writer = new StreamWriter(stream))
-#else
-                using (var writer = new NoAllocNewLineStreamWriter(stream))
-#endif
-                {
-                    PackagesLockFileFormat.Write(writer, lockFile);
-                }
-            });
-
-            Assert.NotNull(exception);
-            return (exception, stream.ToArray());
-        }
     }
 }

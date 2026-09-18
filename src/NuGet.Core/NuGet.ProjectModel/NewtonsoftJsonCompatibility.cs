@@ -10,6 +10,11 @@ namespace NuGet.ProjectModel
 {
     internal static class NewtonsoftJsonCompatibility
     {
+        internal static readonly JsonWriterOptions CompactWriterOptions = new()
+        {
+            Encoder = NewtonsoftCompatibleJavaScriptEncoder.Instance
+        };
+
         internal static readonly JsonWriterOptions WriterOptions = new()
         {
             Encoder = NewtonsoftCompatibleJavaScriptEncoder.Instance,

@@ -228,21 +228,6 @@ namespace NuGet.ProjectModel
         private static void WriteToStream(Stream stream, PackagesLockFile lockFile)
         {
             ValidatePropertyNames(lockFile);
-
-            if (ContainsInvalidUtf16(lockFile))
-            {
-#if NET5_0_OR_GREATER
-                using (var textWriter = new StreamWriter(stream))
-#else
-                using (var textWriter = new NoAllocNewLineStreamWriter(stream))
-#endif
-                {
-                    Write(textWriter, lockFile);
-                }
-
-                return;
-            }
-
             WriteToStreamWithoutValidation(stream, lockFile);
         }
 

@@ -251,6 +251,37 @@ namespace NuGet.ProjectModel.Test
             Assert.Equal(expectedHash, actualHash);
         }
 
+        [Theory]
+        [InlineData(false, "f+Vi3llfUb0=")]
+        [InlineData(true, "Jm48BciOgHMKTwz4RpQewswQHNyCNK+pz3T4E/gshsQSkD7CPrQN8Ak/7v18bB40CognpYVclPXDpwsK9Jf4lQ==")]
+        public void WriteNameValue_WithNewtonsoftCompatibleEscaping_PreservesHistoricalHash(bool useLegacyHashFunction, string expectedHash)
+        {
+            const string Value = "unicode-café-\U0001F600-html-<&>-delete-\u007F-next-\u0085-line-\u2028-paragraph-\u2029-controls-\u0000\u0001\b\t\n\f\r\u001F-quote-\"-slash-\\";
+            IHashFunction hashFunction = useLegacyHashFunction ? new Sha512HashFunction() : new FnvHash64Function();
+            using var writer = new HashObjectWriter(hashFunction);
+            writer.WriteObjectStart();
+            writer.WriteNameValue(Value, Value);
+            writer.WriteObjectEnd();
+
+            string actualHash = writer.GetHash();
+
+            Assert.Equal(expectedHash, actualHash);
+        }
+
+        [Fact]
+        public void WriteNameValue_LargerThanBuffer_PreservesHistoricalHash()
+        {
+            using var writer = new HashObjectWriter(new FnvHash64Function());
+            writer.WriteObjectStart();
+            writer.WriteNameValue(PropertyName, new string('a', 5000));
+            writer.WriteObjectEnd();
+
+            const string expectedHash = "VZbTm+oq4Qs=";
+            string actualHash = writer.GetHash();
+
+            Assert.Equal(expectedHash, actualHash);
+        }
+
         [Fact]
         public void WriteNameArray_WhenNameIsNull_Throws()
         {

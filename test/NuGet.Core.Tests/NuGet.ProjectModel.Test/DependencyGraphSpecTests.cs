@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
+using System.Text;
 using Microsoft.Internal.NuGet.Testing.SignedPackages;
 using NuGet.Commands.Test;
 using NuGet.Common;
@@ -448,6 +449,80 @@ namespace NuGet.ProjectModel.Test
 
             // Assert
             Assert.Equal(expectedJson, actualJson);
+        }
+
+        [Fact]
+        public void Save_PublicApis_PreserveHistoricalBytesAndStreamOwnership()
+        {
+            string expectedJson = GetResourceAsJson(DgSpecWithCentralDependencies);
+            byte[] expectedBytes = Encoding.UTF8.GetBytes(expectedJson);
+            DependencyGraphSpec dependencyGraphSpec = CreateDependencyGraphSpecWithCentralDependencies(CreateTargetFrameworkInformation());
+            string filePath = Path.GetTempFileName();
+
+            try
+            {
+                var stream = new MemoryStream();
+                dependencyGraphSpec.Save(stream);
+                byte[] streamBytes = stream.ToArray();
+
+                File.WriteAllText(filePath, new string('x', expectedJson.Length * 2));
+                dependencyGraphSpec.Save(filePath);
+                byte[] fileBytes = File.ReadAllBytes(filePath);
+
+                Assert.Equal(expectedBytes, streamBytes);
+                Assert.Equal(expectedBytes, fileBytes);
+                Assert.False(stream.CanWrite);
+            }
+            finally
+            {
+                File.Delete(filePath);
+            }
+        }
+
+        [Fact]
+        public void Save_WithNewtonsoftCompatibleEscaping_PreservesExactText()
+        {
+            const string ProjectUniqueName = "unicode-café-\U0001F600-html-<&>-delete-\u007F-next-\u0085-line-\u2028-paragraph-\u2029-controls-\u0000\u0001\b\t\n\f\r\u001F-quote-\"-slash-\\";
+            const string EscapedProjectUniqueName = "unicode-café-\U0001F600-html-<&>-delete-\u007F-next-\\u0085-line-\\u2028-paragraph-\\u2029-controls-\\u0000\\u0001\\b\\t\\n\\f\\r\\u001f-quote-\\\"-slash-\\\\";
+            string expected = string.Join(
+                Environment.NewLine,
+                "{",
+                "  \"format\": 1,",
+                "  \"restore\": {",
+                $"    \"{EscapedProjectUniqueName}\": {{}}",
+                "  },",
+                "  \"projects\": {",
+                $"    \"{EscapedProjectUniqueName}\": {{",
+                "      \"restore\": {",
+                $"        \"projectUniqueName\": \"{EscapedProjectUniqueName}\",",
+                "        \"UsingMicrosoftNETSdk\": false",
+                "      }",
+                "    }",
+                "  }",
+                "}");
+            var dependencyGraphSpec = new DependencyGraphSpec();
+            dependencyGraphSpec.AddRestore(ProjectUniqueName);
+            dependencyGraphSpec.AddProject(new PackageSpec
+            {
+                RestoreMetadata = new ProjectRestoreMetadata
+                {
+                    ProjectUniqueName = ProjectUniqueName
+                }
+            });
+            var stream = new MemoryStream();
+
+            dependencyGraphSpec.Save(stream);
+
+            Assert.Equal(expected, Encoding.UTF8.GetString(stream.ToArray()));
+        }
+
+        [Fact]
+        public void Save_WithNullStream_ThrowsArgumentNullException()
+        {
+            ArgumentNullException exception = Assert.Throws<ArgumentNullException>(
+                () => new DependencyGraphSpec().Save(stream: null));
+
+            Assert.Equal("stream", exception.ParamName);
         }
 
         [Theory]

@@ -3,8 +3,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
-using Newtonsoft.Json;
+using System.Text.Json;
 using NuGet.Packaging;
 using NuGet.RuntimeModel;
 
@@ -25,8 +24,8 @@ namespace NuGet.ProjectModel
         private bool _isReadOnly;
         private int _nestLevel;
         private readonly CircularMemoryStream _stream;
-        private readonly StreamWriter _streamWriter;
-        private readonly JsonTextWriter _writer;
+        private readonly Utf8JsonWriter _jsonWriter;
+        private readonly Utf8JsonObjectWriter _writer;
 
         /// <summary>
         /// Creates a new instance with the provide hash function.
@@ -42,8 +41,8 @@ namespace NuGet.ProjectModel
             _buffer = new byte[DefaultBufferSize];
             _hashFunc = hashFunc;
             _stream = new CircularMemoryStream(_buffer);
-            _streamWriter = new StreamWriter(_stream);
-            _writer = new JsonTextWriter(_streamWriter);
+            _jsonWriter = new Utf8JsonWriter(_stream, NewtonsoftJsonCompatibility.CompactWriterOptions);
+            _writer = new Utf8JsonObjectWriter(_jsonWriter);
 
             _stream.OnFlush += OnFlush;
         }
@@ -55,8 +54,7 @@ namespace NuGet.ProjectModel
                 _stream.OnFlush -= OnFlush;
 
                 _hashFunc.Dispose();
-                _writer.Close();
-                _streamWriter.Dispose();
+                _jsonWriter.Dispose();
                 _stream.Dispose();
 
                 _isDisposed = true;
@@ -68,7 +66,7 @@ namespace NuGet.ProjectModel
             ThrowIfDisposed();
             ThrowIfReadOnly();
 
-            _writer.WriteStartObject();
+            _writer.WriteObjectStart();
 
             ++_nestLevel;
         }
@@ -83,8 +81,7 @@ namespace NuGet.ProjectModel
             ThrowIfDisposed();
             ThrowIfReadOnly();
 
-            _writer.WritePropertyName(name);
-            _writer.WriteStartObject();
+            _writer.WriteObjectStart(name);
 
             ++_nestLevel;
         }
@@ -99,7 +96,7 @@ namespace NuGet.ProjectModel
                 throw new InvalidOperationException();
             }
 
-            _writer.WriteEndObject();
+            _writer.WriteObjectEnd();
 
             --_nestLevel;
         }
@@ -114,8 +111,7 @@ namespace NuGet.ProjectModel
             ThrowIfDisposed();
             ThrowIfReadOnly();
 
-            _writer.WritePropertyName(name);
-            _writer.WriteValue(value);
+            _writer.WriteNameValue(name, value);
         }
 
         public void WriteNameValue(string name, bool value)
@@ -128,8 +124,7 @@ namespace NuGet.ProjectModel
             ThrowIfDisposed();
             ThrowIfReadOnly();
 
-            _writer.WritePropertyName(name);
-            _writer.WriteValue(value);
+            _writer.WriteNameValue(name, value);
         }
 
         public void WriteNameValue(string name, string? value)
@@ -142,8 +137,7 @@ namespace NuGet.ProjectModel
             ThrowIfDisposed();
             ThrowIfReadOnly();
 
-            _writer.WritePropertyName(name);
-            _writer.WriteValue(value);
+            _writer.WriteNameValue(name, value);
         }
 
         public void WriteNameArray(string name, IEnumerable<string> values)
@@ -161,15 +155,7 @@ namespace NuGet.ProjectModel
             ThrowIfDisposed();
             ThrowIfReadOnly();
 
-            _writer.WritePropertyName(name);
-            _writer.WriteStartArray();
-
-            foreach (string value in values)
-            {
-                _writer.WriteValue(value);
-            }
-
-            _writer.WriteEndArray();
+            _writer.WriteNameArray(name, values);
         }
 
         public void WriteNonEmptyNameArray(string name, IEnumerable<string> values)
@@ -187,24 +173,7 @@ namespace NuGet.ProjectModel
             ThrowIfDisposed();
             ThrowIfReadOnly();
 
-            // Manually enumerate the IEnumerable so we only write the name
-            // when there are corresponding values and avoid potentially expensive
-            // multiple enumeration.
-            var enumerator = values.NoAllocEnumerate().GetEnumerator();
-            if (!enumerator.MoveNext())
-            {
-                return;
-            }
-
-            _writer.WritePropertyName(name);
-            _writer.WriteStartArray();
-            _writer.WriteValue(enumerator.Current);
-            while (enumerator.MoveNext())
-            {
-                _writer.WriteValue(enumerator.Current);
-            }
-
-            _writer.WriteEndArray();
+            _writer.WriteNonEmptyNameArray(name, values);
         }
 
         /// <summary>
@@ -219,7 +188,8 @@ namespace NuGet.ProjectModel
 
             if (!_isReadOnly)
             {
-                _writer.Flush();
+                _jsonWriter.Flush();
+                _stream.Flush();
 
                 _isReadOnly = true;
             }
@@ -237,8 +207,7 @@ namespace NuGet.ProjectModel
             ThrowIfDisposed();
             ThrowIfReadOnly();
 
-            _writer.WritePropertyName(name);
-            _writer.WriteStartArray();
+            _writer.WriteArrayStart(name);
 
             ++_nestLevel;
         }
@@ -253,7 +222,7 @@ namespace NuGet.ProjectModel
                 throw new InvalidOperationException();
             }
 
-            _writer.WriteEndArray();
+            _writer.WriteArrayEnd();
 
             --_nestLevel;
         }
