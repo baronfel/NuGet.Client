@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -534,12 +535,218 @@ namespace NuGet.ProjectModel.Test
             }";
 
             var lockFile = PackagesLockFileFormat.Parse(nuGetLockFileContent, "In Memory");
+            var output = PackagesLockFileFormat.Render(lockFile);
+            // JObject.ToString() pins the legacy property order, indentation, and platform newline.
+            var expected = JObject.Parse(nuGetLockFileContent).ToString();
 
-            var output = JObject.Parse(PackagesLockFileFormat.Render(lockFile));
-            var expected = JObject.Parse(nuGetLockFileContent);
+            Assert.Equal(expected, output);
+        }
 
-            // Assert
-            Assert.Equal(expected.ToString(), output.ToString());
+        [Fact]
+        public void PackagesLockFileFormat_WritePublicApis_PreserveNewtonsoftOutput()
+        {
+            const string lockFileContent = """
+                {
+                  "version": 2,
+                  "dependencies": {
+                    "net8.0": {
+                      "ProjectA": {
+                        "type": "Project",
+                        "resolved": "1.0.0",
+                        "contentHash": "café<&",
+                        "dependencies": {
+                          "PackageB": "[1.0.0, 2.0.0)"
+                        }
+                      }
+                    }
+                  }
+                }
+                """;
+            PackagesLockFile lockFile = PackagesLockFileFormat.Parse(lockFileContent, "In Memory");
+            string expected = JObject.Parse(lockFileContent).ToString();
+            string filePath = Path.GetTempFileName();
+
+            try
+            {
+                string renderedOutput = PackagesLockFileFormat.Render(lockFile);
+
+                var stream = new MemoryStream();
+                PackagesLockFileFormat.Write(stream, lockFile);
+                // Write historically owns the stream; ToArray still exposes its exact legacy bytes after disposal.
+                string streamOutput = Encoding.UTF8.GetString(stream.ToArray());
+
+                PackagesLockFileFormat.Write(filePath, lockFile);
+                string fileOutput = File.ReadAllText(filePath);
+
+                Assert.Equal(expected, renderedOutput);
+                Assert.Equal(expected, streamOutput);
+                Assert.Equal(expected, fileOutput);
+            }
+            finally
+            {
+                File.Delete(filePath);
+            }
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_WriteTextWriter_UsesLegacyNewtonsoftWriter()
+        {
+            const string lockFileContent = """
+                {
+                  "version": 1,
+                  "dependencies": {
+                    "net8.0": {
+                      "PackageA": {
+                        "type": "Direct",
+                        "contentHash": "café<&"
+                      }
+                    }
+                  }
+                }
+                """;
+            PackagesLockFile lockFile = PackagesLockFileFormat.Parse(lockFileContent, "In Memory");
+            string expected = JObject.Parse(lockFileContent).ToString();
+            var writer = new StringWriter();
+
+            // This shipped overload intentionally remains the Newtonsoft compatibility path.
+            PackagesLockFileFormat.Write(writer, lockFile);
+
+            Assert.Equal(expected, writer.ToString());
+        }
+
+        // Newtonsoft emits ordinary Unicode and HTML-sensitive characters verbatim,
+        // uses lowercase escapes for controls and separators, and JSON-escapes quotes and backslashes.
+        [Theory]
+        [InlineData("emoji-\U0001F600")]
+        [InlineData("delete-\u007F")]
+        [InlineData("next-line-\u0085")]
+        [InlineData("line-separator-\u2028")]
+        [InlineData("paragraph-separator-\u2029")]
+        [InlineData("controls-\u0000\u0001\b\t\n\f\r\u001F")]
+        [InlineData("Latin-café-Ångström")]
+        [InlineData("html-<>&'")]
+        [InlineData("quote-\"-backslash-\\")]
+        public void PackagesLockFileFormat_WriteEscaping_MatchesNewtonsoft(string value)
+        {
+            PackagesLockFile lockFile = CreateLockFileWithValue(value);
+
+            var legacyWriter = new StringWriter();
+            PackagesLockFileFormat.Write(legacyWriter, lockFile);
+
+            string output = PackagesLockFileFormat.Render(lockFile);
+
+            Assert.Equal(legacyWriter.ToString(), output);
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_WriteMalformedUtf16_UsesSystemTextJson()
+        {
+            foreach (string malformedText in GetMalformedUtf16Values())
+            {
+                AssertSystemTextJsonHandlesMalformedUtf16(CreateLockFileWithValue(malformedText));
+            }
+        }
+
+        [Theory]
+        [InlineData("requested")]
+        [InlineData("resolved")]
+        [InlineData("projectDependency")]
+        [InlineData("packageDependency")]
+        public void PackagesLockFileFormat_WriteMalformedVersionStrings_UseSystemTextJson(string field)
+        {
+            foreach (string malformedText in GetMalformedUtf16Values())
+            {
+                AssertSystemTextJsonHandlesMalformedUtf16(
+                    CreateLockFileWithMalformedVersion(field, malformedText));
+            }
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_WriteDuplicateTargets_DoesNotWriteToStream()
+        {
+            var lockFile = new PackagesLockFile(1);
+            lockFile.Targets.Add(new PackagesLockFileTarget { TargetFramework = NuGetFramework.Parse("net8.0") });
+            lockFile.Targets.Add(new PackagesLockFileTarget { TargetFramework = NuGetFramework.Parse("net8.0") });
+
+            AssertDuplicateWriteIsAtomic(lockFile, "net8.0");
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_WriteDuplicatePackages_DoesNotWriteToStream()
+        {
+            var lockFile = new PackagesLockFile(1);
+            var target = new PackagesLockFileTarget { TargetFramework = NuGetFramework.Parse("net8.0") };
+            target.Dependencies.Add(new LockFileDependency { Id = "PackageA" });
+            target.Dependencies.Add(new LockFileDependency { Id = "PackageA" });
+            lockFile.Targets.Add(target);
+
+            AssertDuplicateWriteIsAtomic(lockFile, "PackageA");
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_WriteDuplicateDependencies_DoesNotWriteToStream()
+        {
+            var lockFile = new PackagesLockFile(1);
+            var target = new PackagesLockFileTarget { TargetFramework = NuGetFramework.Parse("net8.0") };
+            var package = new LockFileDependency { Id = "PackageA" };
+            package.Dependencies.Add(new NuGet.Packaging.Core.PackageDependency("PackageB"));
+            package.Dependencies.Add(new NuGet.Packaging.Core.PackageDependency("PackageB"));
+            target.Dependencies.Add(package);
+            lockFile.Targets.Add(target);
+
+            AssertDuplicateWriteIsAtomic(lockFile, "PackageB");
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_WriteVersion3TargetNamedVersion_DoesNotWriteToStream()
+        {
+            var lockFile = new PackagesLockFile(3);
+            lockFile.Targets.Add(new PackagesLockFileTarget
+            {
+                TargetAlias = "version",
+                TargetFramework = NuGetFramework.Parse("net8.0")
+            });
+
+            AssertDuplicateWriteIsAtomic(lockFile, "version");
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_WriteNullTarget_DoesNotWriteToStream()
+        {
+            var lockFile = new PackagesLockFile(1);
+            lockFile.Targets.Add(null);
+
+            AssertNullNameWriteIsAtomic(lockFile);
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_WriteNullPackageNameAfterLargeContent_DoesNotWriteToStream()
+        {
+            // The legacy DOM validated all property names before flushing any preceding content.
+            var lockFile = new PackagesLockFile(1);
+            var target = new PackagesLockFileTarget { TargetFramework = NuGetFramework.Parse("net8.0") };
+            target.Dependencies.Add(new LockFileDependency
+            {
+                Id = "LargePackage",
+                ContentHash = new string('a', 100_000)
+            });
+            target.Dependencies.Add(new LockFileDependency { Id = null });
+            lockFile.Targets.Add(target);
+
+            AssertNullNameWriteIsAtomic(lockFile);
+        }
+
+        [Fact]
+        public void PackagesLockFileFormat_WriteNullDependency_DoesNotWriteToStream()
+        {
+            var lockFile = new PackagesLockFile(1);
+            var target = new PackagesLockFileTarget { TargetFramework = NuGetFramework.Parse("net8.0") };
+            var package = new LockFileDependency { Id = "PackageA" };
+            package.Dependencies.Add(null);
+            target.Dependencies.Add(package);
+            lockFile.Targets.Add(target);
+
+            AssertNullNameWriteIsAtomic(lockFile);
         }
 
         [Fact]
@@ -710,7 +917,8 @@ namespace NuGet.ProjectModel.Test
             }";
 
             var lockFile = PackagesLockFileFormat.Parse(originalContent, "In Memory");
-            var output = JObject.Parse(PackagesLockFileFormat.Render(lockFile)).ToString();
+            var output = PackagesLockFileFormat.Render(lockFile);
+            // Preserve the legacy textual shape, not only semantic JSON equivalence.
             var expected = JObject.Parse(originalContent).ToString();
 
             Assert.Equal(expected, output);
@@ -875,6 +1083,134 @@ namespace NuGet.ProjectModel.Test
             public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
             public override void SetLength(long value) => throw new NotSupportedException();
             public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        }
+
+        private static void AssertDuplicateWriteIsAtomic(PackagesLockFile lockFile, string propertyName)
+        {
+            var stream = new MemoryStream();
+
+            // The legacy DOM writer rejected duplicate properties before emitting bytes.
+            ArgumentException exception = Assert.Throws<ArgumentException>(
+                () => PackagesLockFileFormat.Write(stream, lockFile));
+
+            // Preserve the useful duplicate name, zero-byte failure, and caller-stream ownership.
+            Assert.Contains(propertyName, exception.Message);
+            Assert.Empty(stream.ToArray());
+            Assert.False(stream.CanWrite);
+        }
+
+        private static void AssertNullNameWriteIsAtomic(PackagesLockFile lockFile)
+        {
+            var stream = new MemoryStream();
+
+            ArgumentNullException exception = Assert.Throws<ArgumentNullException>(
+                () => PackagesLockFileFormat.Write(stream, lockFile));
+
+            Assert.Equal("name", exception.ParamName);
+            Assert.Empty(stream.ToArray());
+            Assert.False(stream.CanWrite);
+        }
+
+        private static PackagesLockFile CreateLockFileWithValue(string value)
+        {
+            var lockFile = new PackagesLockFile(3);
+            var target = new PackagesLockFileTarget
+            {
+                TargetAlias = $"target-{value}",
+                TargetFramework = NuGetFramework.Parse("net8.0")
+            };
+            var package = new LockFileDependency
+            {
+                Id = $"package-{value}",
+                Type = PackageDependencyType.Direct,
+                ContentHash = value
+            };
+            package.Dependencies.Add(new NuGet.Packaging.Core.PackageDependency($"dependency-{value}"));
+            target.Dependencies.Add(package);
+            lockFile.Targets.Add(target);
+            return lockFile;
+        }
+
+        private static PackagesLockFile CreateLockFileWithMalformedVersion(
+            string field,
+            string malformedText)
+        {
+            var version = new NuGetVersion(1, 0, 0, $"bad-{malformedText}");
+            var lockFile = new PackagesLockFile(3);
+            var target = new PackagesLockFileTarget
+            {
+                TargetAlias = "net8.0",
+                TargetFramework = NuGetFramework.Parse("net8.0")
+            };
+            var package = new LockFileDependency
+            {
+                Id = "PackageA",
+                Type = field == "projectDependency"
+                    ? PackageDependencyType.Project
+                    : PackageDependencyType.Direct
+            };
+
+            switch (field)
+            {
+                case "requested":
+                    package.RequestedVersion = new VersionRange(version);
+                    break;
+                case "resolved":
+                    package.ResolvedVersion = version;
+                    break;
+                case "projectDependency":
+                case "packageDependency":
+                    package.Dependencies.Add(
+                        new NuGet.Packaging.Core.PackageDependency("PackageB", new VersionRange(version)));
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(field));
+            }
+
+            target.Dependencies.Add(package);
+            lockFile.Targets.Add(target);
+            return lockFile;
+        }
+
+        private static void AssertSystemTextJsonHandlesMalformedUtf16(PackagesLockFile lockFile)
+        {
+            string renderedOutput = PackagesLockFileFormat.Render(lockFile);
+
+            var stream = new MemoryStream();
+            PackagesLockFileFormat.Write(stream, lockFile);
+
+            Assert.NotNull(JObject.Parse(renderedOutput));
+            Assert.True(IsWellFormedUtf16(renderedOutput));
+            Assert.Equal(Encoding.UTF8.GetBytes(renderedOutput), stream.ToArray());
+            Assert.False(stream.CanWrite);
+        }
+
+        private static IEnumerable<string> GetMalformedUtf16Values()
+        {
+            yield return "\uD800";
+            yield return "\uDC00";
+            yield return "\uD800x";
+        }
+
+        private static bool IsWellFormedUtf16(string value)
+        {
+            for (int index = 0; index < value.Length; index++)
+            {
+                char character = value[index];
+                if (char.IsHighSurrogate(character))
+                {
+                    if (index + 1 >= value.Length || !char.IsLowSurrogate(value[++index]))
+                    {
+                        return false;
+                    }
+                }
+                else if (char.IsLowSurrogate(character))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }
