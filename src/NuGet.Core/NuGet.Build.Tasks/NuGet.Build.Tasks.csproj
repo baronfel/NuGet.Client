@@ -43,8 +43,13 @@
   <ItemGroup Condition=" '$(TargetFramework)' == '$(NETFXTargetFramework)' ">
     <ProjectReference Include="..\NuGet.PackageManagement\NuGet.PackageManagement.csproj" />
     <Reference Include="Microsoft.Build.Utilities.v4.0" />
-    <Reference Include="Microsoft.Build.Framework" />
     <PackageReference Include="System.Threading.Tasks.Dataflow" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Experiment scaffolding: MSBuild 18.13 includes this attribute. -->
+    <Compile Remove="Common\MSBuildMultiThreadableTaskAttribute.cs" />
+    <PackageReference Include="Microsoft.Build.Framework" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup Condition=" '$(TargetFramework)' != '$(NETFXTargetFramework)' ">

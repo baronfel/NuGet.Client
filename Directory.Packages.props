@@ -16,7 +16,8 @@
 
   <PropertyGroup>
     <!-- Read docs/updating-packages.md before updating MSBuild's version -->
-    <MicrosoftBuildVersion Condition="'$(MicrosoftBuildVersion)' == ''">18.6.3</MicrosoftBuildVersion>
+    <!-- Experiment scaffolding: revert to the shipping version before upstreaming. -->
+    <MicrosoftBuildVersion Condition="'$(MicrosoftBuildVersion)' == ''">18.13.0-dev.26474.1</MicrosoftBuildVersion>
   </PropertyGroup>
 
     <!-- Overridden by source build to ensure the same version is used across products, do not remove these properties -->
