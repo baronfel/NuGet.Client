@@ -21,6 +21,7 @@ namespace NuGet.Commands
             PackagesDirectory = request.PackagesDirectory;
             ExistingLockFile = existingLockFile;
             MaxDegreeOfConcurrency = request.MaxDegreeOfConcurrency;
+            OperationProgressReporter = request.OperationProgressReporter;
             Project = packageSpec;
             PackageExtractionContext = new PackageExtractionContext(
                 request.PackageSaveMode,
@@ -36,6 +37,7 @@ namespace NuGet.Commands
         public RestoreCollectorLogger Log { get; }
         public string PackagesDirectory { get; }
         public int MaxDegreeOfConcurrency { get; }
+        public IRestoreOperationProgressReporter OperationProgressReporter { get; }
         public LockFile ExistingLockFile { get; }
         public PackageSpec Project { get; }
         public PackageExtractionContext PackageExtractionContext { get; }

@@ -1,4 +1,9 @@
 #nullable enable
+NuGet.Commands.IRestoreOperationProgressReporter
+NuGet.Commands.IRestoreOperationProgressReporter.CompleteProject(string! projectPath) -> void
+NuGet.Commands.IRestoreOperationProgressReporter.ReportPackageDownload(string! packageId, string! packageVersion) -> void
+NuGet.Commands.IRestoreOperationProgressReporter.Start(int totalProjects) -> void
+NuGet.Commands.IRestoreOperationProgressReporter.StartProject(string! projectPath) -> void
 NuGet.Commands.AddSourceArgs.MinPublishAgeHours.get -> uint?
 NuGet.Commands.AddSourceArgs.MinPublishAgeHours.set -> void
 NuGet.Commands.UpdateSourceArgs.MinPublishAgeHours.get -> uint?

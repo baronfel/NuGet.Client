@@ -157,6 +157,21 @@
         <target state="translated">Keine Projektmappe gefunden. Führen Sie eine Wiederherstellung anhand einer Projektmappe durch, oder übergeben Sie "/p:SolutionDir".</target>
         <note />
       </trans-unit>
+      <trans-unit id="RestoreProgressDownloading">
+        <source>Downloading {0} {1}</source>
+        <target state="new">Downloading {0} {1}</target>
+        <note>0 - package ID, 1 - package version</note>
+      </trans-unit>
+      <trans-unit id="RestoreProgressResolving">
+        <source>Resolving dependencies</source>
+        <target state="new">Resolving dependencies</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RestoreProgressRestoring">
+        <source>Restoring {0}</source>
+        <target state="new">Restoring {0}</target>
+        <note>0 - project file name</note>
+      </trans-unit>
       <trans-unit id="RestoreProgressStatus">
         <source>Restored {0}</source>
         <target state="new">Restored {0}</target>

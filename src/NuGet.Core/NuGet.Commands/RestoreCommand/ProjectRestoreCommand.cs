@@ -404,6 +404,8 @@ namespace NuGet.Commands
 
                 try
                 {
+                    _request.OperationProgressReporter?.ReportPackageDownload(packageIdentity.Id, packageIdentity.Version.ToNormalizedString());
+
                     using (var packageDependency = await installItem.Provider.GetPackageDownloaderAsync(
                         packageIdentity,
                         _request.CacheContext,

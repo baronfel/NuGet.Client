@@ -245,7 +245,7 @@ namespace NuGet.Build.Tasks
             (var dgFile, var additionalMessages) = MSBuildRestoreUtility.GetDependencySpec(wrappedItems, readOnly: true, collectAdditionalMessages: true);
 
             EmbedInBinlog = GetFilesToEmbedInBinlog(dgFile);
-            _progressReporter = new MSBuildRestoreProgressReporter(BuildEngine, dgFile.Restore.Count);
+            _progressReporter = new MSBuildRestoreProgressReporter(BuildEngine);
 
             if (RestoreNoCache)
             {

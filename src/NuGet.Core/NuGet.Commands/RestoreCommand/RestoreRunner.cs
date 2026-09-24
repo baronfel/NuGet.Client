@@ -69,6 +69,9 @@ namespace NuGet.Commands
             var requests = new Queue<RestoreSummaryRequest>(restoreRequests);
             var restoreTasks = new List<Task<RestoreSummary>>(maxTasks);
             var restoreSummaries = new List<RestoreSummary>(requests.Count);
+            var operationProgress = restoreArgs.ProgressReporter as IRestoreOperationProgressReporter;
+
+            operationProgress?.Start(requests.Count);
 
             // Run requests
             while (requests.Count > 0)
@@ -82,7 +85,7 @@ namespace NuGet.Commands
 
                 var request = requests.Dequeue();
 
-                var task = Task.Run(() => ExecuteAndCommitAsync(request, restoreArgs.ProgressReporter, token), token);
+                var task = Task.Run(() => ExecuteAndCommitAsync(request, restoreArgs.ProgressReporter, operationProgress, token), token);
                 restoreTasks.Add(task);
             }
 
@@ -238,11 +241,25 @@ namespace NuGet.Commands
             return maxTasks;
         }
 
-        private static async Task<RestoreSummary> ExecuteAndCommitAsync(RestoreSummaryRequest summaryRequest, IRestoreProgressReporter progressReporter, CancellationToken token)
+        private static async Task<RestoreSummary> ExecuteAndCommitAsync(
+            RestoreSummaryRequest summaryRequest,
+            IRestoreProgressReporter progressReporter,
+            IRestoreOperationProgressReporter operationProgress,
+            CancellationToken token)
         {
-            RestoreResultPair result = await ExecuteAsync(summaryRequest, token);
+            operationProgress?.StartProject(summaryRequest.InputPath);
+            summaryRequest.Request.OperationProgressReporter = operationProgress;
 
-            return await CommitAsync(result, progressReporter, token);
+            try
+            {
+                RestoreResultPair result = await ExecuteAsync(summaryRequest, token);
+
+                return await CommitAsync(result, progressReporter, token);
+            }
+            finally
+            {
+                operationProgress?.CompleteProject(summaryRequest.InputPath);
+            }
         }
 
         private static async Task<RestoreResultPair> ExecuteAsync(RestoreSummaryRequest summaryRequest, CancellationToken token)

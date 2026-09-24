@@ -59,6 +59,8 @@ namespace NuGet.Commands
 
         internal LockFileBuilderCache LockFileBuilderCache { get; }
 
+        internal IRestoreOperationProgressReporter OperationProgressReporter { get; set; }
+
         public ILogger Log { get; set; }
 
         /// <summary>

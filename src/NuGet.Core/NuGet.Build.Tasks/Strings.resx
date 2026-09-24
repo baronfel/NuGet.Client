@@ -139,6 +139,17 @@
     <value>Restored {0}</value>
     <comment>0 - project file name</comment>
   </data>
+  <data name="RestoreProgressResolving" xml:space="preserve">
+    <value>Resolving dependencies</value>
+  </data>
+  <data name="RestoreProgressRestoring" xml:space="preserve">
+    <value>Restoring {0}</value>
+    <comment>0 - project file name</comment>
+  </data>
+  <data name="RestoreProgressDownloading" xml:space="preserve">
+    <value>Downloading {0} {1}</value>
+    <comment>0 - package ID, 1 - package version</comment>
+  </data>
   <data name="RestoreProgressTitle" xml:space="preserve">
     <value>Restoring projects</value>
   </data>

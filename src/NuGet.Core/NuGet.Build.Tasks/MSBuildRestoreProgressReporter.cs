@@ -13,19 +13,53 @@ using NuGet.Commands;
 
 namespace NuGet.Build.Tasks
 {
-    internal sealed class MSBuildRestoreProgressReporter : IRestoreProgressReporter, IDisposable
+    internal sealed class MSBuildRestoreProgressReporter : IRestoreOperationProgressReporter, IDisposable
     {
         private readonly ITaskProgressReporter _reporter;
-        private readonly int _totalProjects;
         private int _completedProjects;
+        private int _totalProjects;
 
-        internal MSBuildRestoreProgressReporter(IBuildEngine buildEngine, int totalProjects)
+        internal MSBuildRestoreProgressReporter(IBuildEngine buildEngine)
         {
-            _totalProjects = totalProjects;
             _reporter = (buildEngine as IBuildEngine10)?.EngineServices.CreateTaskProgressReporter(
                 Strings.ResourceManager.GetString("RestoreProgressTitle", Strings.Culture),
                 TaskProgressUnit.Items);
-            _reporter?.Report(new TaskProgressUpdate(0, totalProjects));
+        }
+
+        public void Start(int totalProjects)
+        {
+            _totalProjects = totalProjects;
+            _reporter?.Report(new TaskProgressUpdate(
+                0,
+                totalProjects,
+                Strings.ResourceManager.GetString("RestoreProgressResolving", Strings.Culture)));
+        }
+
+        public void StartProject(string projectPath)
+        {
+            Report(
+                Volatile.Read(ref _completedProjects),
+                "RestoreProgressRestoring",
+                projectPath);
+        }
+
+        public void CompleteProject(string projectPath)
+        {
+            Report(
+                Interlocked.Increment(ref _completedProjects),
+                "RestoreProgressStatus",
+                projectPath);
+        }
+
+        public void ReportPackageDownload(string packageId, string packageVersion)
+        {
+            string status = string.Format(
+                CultureInfo.CurrentCulture,
+                Strings.ResourceManager.GetString("RestoreProgressDownloading", Strings.Culture),
+                packageId,
+                packageVersion);
+
+            _reporter?.Report(new TaskProgressUpdate(Volatile.Read(ref _completedProjects), _totalProjects, status));
         }
 
         public void StartProjectUpdate(string projectPath, IReadOnlyList<string> updatedFiles)
@@ -34,10 +68,13 @@ namespace NuGet.Build.Tasks
 
         public void EndProjectUpdate(string projectPath, IReadOnlyList<string> updatedFiles)
         {
-            int completed = Interlocked.Increment(ref _completedProjects);
+        }
+
+        private void Report(int completed, string resourceName, string projectPath)
+        {
             string status = string.Format(
                 CultureInfo.CurrentCulture,
-                Strings.ResourceManager.GetString("RestoreProgressStatus", Strings.Culture),
+                Strings.ResourceManager.GetString(resourceName, Strings.Culture),
                 Path.GetFileName(projectPath));
 
             _reporter?.Report(new TaskProgressUpdate(completed, _totalProjects, status));

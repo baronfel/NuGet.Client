@@ -19,6 +19,7 @@ using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
+using Moq;
 using Xunit;
 
 namespace NuGet.Commands.Test
@@ -73,6 +74,12 @@ namespace NuGet.Commands.Test
 
                 var logger = new TestLogger();
                 var lockPath = Path.Combine(spec1.RestoreMetadata.OutputPath, "project.assets.json");
+                var progress = new Mock<IRestoreOperationProgressReporter>(MockBehavior.Strict);
+                progress.Setup(p => p.Start(1));
+                progress.Setup(p => p.StartProject(spec1.RestoreMetadata.ProjectPath));
+                progress.Setup(p => p.CompleteProject(spec1.RestoreMetadata.ProjectPath));
+                progress.Setup(p => p.StartProjectUpdate(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>()));
+                progress.Setup(p => p.EndProjectUpdate(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>()));
 
                 var sourceRepos = sources.Select(source => Repository.Factory.GetCoreV3(source.Source)).ToList();
 
@@ -86,6 +93,7 @@ namespace NuGet.Commands.Test
                         GlobalPackagesFolder = packagesDir.FullName,
                         Sources = new List<string>() { packageSource.FullName },
                         Log = logger,
+                        ProgressReporter = progress.Object,
                         CachingSourceProvider = new CachingSourceProvider(new TestPackageSourceProvider(sources)),
                         PreLoadedRequestProviders = new List<IPreLoadedRestoreRequestProvider>()
                         {
@@ -103,6 +111,7 @@ namespace NuGet.Commands.Test
                     Assert.True(File.Exists(lockPath), lockPath);
                     Assert.False(File.Exists(Path.Combine(project1.FullName, "project1.nuget.targets")));
                     Assert.False(File.Exists(Path.Combine(project1.FullName, "project1.nuget.props")));
+                    progress.VerifyAll();
                 }
             }
         }
@@ -819,6 +828,7 @@ namespace NuGet.Commands.Test
                     Version = "1.0.0"
                 };
                 await SimpleTestPackageUtility.CreateFullPackageAsync(packageSource.FullName, packageY);
+                var progress = new Mock<IRestoreOperationProgressReporter>();
 
                 using (var cacheContext = new SourceCacheContext())
                 {
@@ -827,6 +837,7 @@ namespace NuGet.Commands.Test
                         CacheContext = cacheContext,
                         DisableParallel = true,
                         Log = new TestLogger(),
+                        ProgressReporter = progress.Object,
                         CachingSourceProvider = new CachingSourceProvider(new TestPackageSourceProvider(sources)),
                         PreLoadedRequestProviders = new List<IPreLoadedRestoreRequestProvider>()
                         {
@@ -853,6 +864,7 @@ namespace NuGet.Commands.Test
                     Assert.True(Directory.Exists(Path.Combine(globalPackagesFolder.FullName, "y", "1.0.0"))); // Y is installed
                     Assert.True(File.Exists(targetsPath));
                     Assert.True(File.Exists(propsPath));
+                    progress.Verify(p => p.ReportPackageDownload("y", "1.0.0"), Times.Once);
                 }
             }
         }
