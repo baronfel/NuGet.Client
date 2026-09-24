@@ -157,6 +157,16 @@
         <target state="translated">No se encontró ninguna solución. Restaurar una solución o pasar /p:SolutionDir</target>
         <note />
       </trans-unit>
+      <trans-unit id="RestoreProgressStatus">
+        <source>Restored {0}</source>
+        <target state="new">Restored {0}</target>
+        <note>0 - project file name</note>
+      </trans-unit>
+      <trans-unit id="RestoreProgressTitle">
+        <source>Restoring projects</source>
+        <target state="new">Restoring projects</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnsupportedFallbackFramework">
         <source>The project fallback framework '{0}' is not a supported target framework.</source>
         <target state="translated">La plataforma de reserva del proyecto "{0}" no es una plataforma de destino admitida.</target>

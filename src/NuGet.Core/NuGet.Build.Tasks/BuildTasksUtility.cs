@@ -129,7 +129,8 @@ namespace NuGet.Build.Tasks
             bool cleanupAssetsForUnsupportedProjects,
             IReadOnlyList<IAssetsLogMessage> additionalMessages,
             Common.ILogger log,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            IRestoreProgressReporter progressReporter = null)
         {
             if (dependencyGraphSpec == null)
             {
@@ -223,7 +224,8 @@ namespace NuGet.Build.Tasks
                             AllowNoOp = !force,
                             HideWarningsAndErrors = hideWarningsAndErrors,
                             RestoreForceEvaluate = forceEvaluate,
-                            AdditionalMessages = additionalMessages
+                            AdditionalMessages = additionalMessages,
+                            ProgressReporter = progressReporter
                         };
 
                         if (restoreContext.DisableParallel)
@@ -789,4 +791,3 @@ namespace NuGet.Build.Tasks
 
     }
 }
-

@@ -157,6 +157,16 @@
         <target state="translated">Keine Projektmappe gefunden. Führen Sie eine Wiederherstellung anhand einer Projektmappe durch, oder übergeben Sie "/p:SolutionDir".</target>
         <note />
       </trans-unit>
+      <trans-unit id="RestoreProgressStatus">
+        <source>Restored {0}</source>
+        <target state="new">Restored {0}</target>
+        <note>0 - project file name</note>
+      </trans-unit>
+      <trans-unit id="RestoreProgressTitle">
+        <source>Restoring projects</source>
+        <target state="new">Restoring projects</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnsupportedFallbackFramework">
         <source>The project fallback framework '{0}' is not a supported target framework.</source>
         <target state="translated">Das Fallbackframework "{0}" für das Projekt ist kein unterstütztes Zielframework.</target>

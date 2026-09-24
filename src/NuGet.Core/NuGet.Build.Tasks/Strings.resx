@@ -135,6 +135,13 @@
   <data name="RestoreCanceled" xml:space="preserve">
     <value>Restore canceled!</value>
   </data>
+  <data name="RestoreProgressStatus" xml:space="preserve">
+    <value>Restored {0}</value>
+    <comment>0 - project file name</comment>
+  </data>
+  <data name="RestoreProgressTitle" xml:space="preserve">
+    <value>Restoring projects</value>
+  </data>
   <data name="UnsupportedFallbackFramework" xml:space="preserve">
     <value>The project fallback framework '{0}' is not a supported target framework.</value>
   </data>

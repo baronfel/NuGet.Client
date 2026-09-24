@@ -33,6 +33,7 @@ namespace NuGet.Build.Tasks
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
         private readonly IEnvironmentVariableReader _environmentVariableReader;
         private bool _disposed = false;
+        private MSBuildRestoreProgressReporter _progressReporter;
 
         public RestoreTask()
             : this(EnvironmentVariableWrapper.Instance)
@@ -154,21 +155,37 @@ namespace NuGet.Build.Tasks
 
             try
             {
-                return ExecuteAsync(log).Result;
+                bool success = ExecuteAsync(log).Result;
+
+                if (success)
+                {
+                    _progressReporter?.Complete();
+                }
+                else
+                {
+                    _progressReporter?.Fail();
+                }
+
+                return success;
             }
             catch (AggregateException ex) when (_cts.Token.IsCancellationRequested && ex.InnerException is OperationCanceledException)
             {
                 // Canceled by user
+                _progressReporter?.Cancel();
                 log.LogError(Strings.RestoreCanceled);
                 return false;
             }
             catch (Exception e)
             {
+                _progressReporter?.Fail();
                 ExceptionUtilities.LogException(e, log);
                 return false;
             }
             finally
             {
+                _progressReporter?.Dispose();
+                _progressReporter = null;
+
                 try
                 {
                     // Tear down plugin processes so they do not linger in a process reused across builds. Scheduled
@@ -228,6 +245,7 @@ namespace NuGet.Build.Tasks
             (var dgFile, var additionalMessages) = MSBuildRestoreUtility.GetDependencySpec(wrappedItems, readOnly: true, collectAdditionalMessages: true);
 
             EmbedInBinlog = GetFilesToEmbedInBinlog(dgFile);
+            _progressReporter = new MSBuildRestoreProgressReporter(BuildEngine, dgFile.Restore.Count);
 
             if (RestoreNoCache)
             {
@@ -250,7 +268,8 @@ namespace NuGet.Build.Tasks
                 cleanupAssetsForUnsupportedProjects: false,
                 additionalMessages: additionalMessages,
                 log: log,
-                cancellationToken: _cts.Token);
+                cancellationToken: _cts.Token,
+                progressReporter: _progressReporter);
 
             int upToDate = 0;
             int audited = 0;
@@ -287,6 +306,8 @@ namespace NuGet.Build.Tasks
 
             if (disposing)
             {
+                _progressReporter?.Dispose();
+                _progressReporter = null;
                 _cts.Dispose();
             }
 
