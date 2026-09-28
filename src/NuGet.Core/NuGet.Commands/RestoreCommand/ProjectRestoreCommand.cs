@@ -363,6 +363,7 @@ namespace NuGet.Commands
             var success = true;
             IRestoreOperationProgressReporter? progressReporter = _request.OperationProgressReporter;
             bool reportPackageBatch = packagesToInstall.Count > 0 && progressReporter is not null;
+            bool[] reportPackageProgress = new bool[packagesToInstall.Count];
             if (packagesToInstall.Count > 0)
             {
                 progressReporter?.StartPackageInstallBatch(packagesToInstall.Count);
@@ -370,6 +371,17 @@ namespace NuGet.Commands
 
             try
             {
+                if (progressReporter is not null)
+                {
+                    for (int i = 0; i < packagesToInstall.Count; i++)
+                    {
+                        LibraryIdentity identity = packagesToInstall[i].Library;
+                        reportPackageProgress[i] = progressReporter.TryStartPackageInstall(
+                            identity.Name,
+                            identity.Version.ToNormalizedString());
+                    }
+                }
+
                 if (packagesToInstall.Count > 0)
                 {
                     // Use up to MaxDegreeOfConcurrency, create less threads if less packages exist.
@@ -377,21 +389,32 @@ namespace NuGet.Commands
 
                     if (threadCount <= 1)
                     {
-                        foreach (var match in packagesToInstall)
+                        for (int i = 0; i < packagesToInstall.Count; i++)
                         {
-                            success &= (await InstallPackageAsync(match, userPackageFolder, _request.PackageExtractionContext, token));
+                            success &= (await InstallPackageAsync(
+                                packagesToInstall[i],
+                                userPackageFolder,
+                                _request.PackageExtractionContext,
+                                token,
+                                reportPackageProgress[i]));
                         }
                     }
                     else
                     {
-                        var bag = new ConcurrentBag<RemoteMatch>(packagesToInstall);
+                        var bag = new ConcurrentBag<(RemoteMatch Match, bool ReportProgress)>(
+                            packagesToInstall.Select((match, index) => (match, reportPackageProgress[index])));
                         var tasks = Enumerable.Range(0, threadCount)
                             .Select(async _ =>
                             {
                                 var result = true;
-                                while (bag.TryTake(out RemoteMatch? match))
+                                while (bag.TryTake(out (RemoteMatch Match, bool ReportProgress) item))
                                 {
-                                    result &= await InstallPackageAsync(match, userPackageFolder, _request.PackageExtractionContext, token);
+                                    result &= await InstallPackageAsync(
+                                        item.Match,
+                                        userPackageFolder,
+                                        _request.PackageExtractionContext,
+                                        token,
+                                        item.ReportProgress);
                                 }
                                 return result;
                             });
@@ -411,7 +434,12 @@ namespace NuGet.Commands
             return success;
         }
 
-        private async Task<bool> InstallPackageAsync(RemoteMatch installItem, NuGetv3LocalRepository userPackageFolder, PackageExtractionContext packageExtractionContext, CancellationToken token)
+        private async Task<bool> InstallPackageAsync(
+            RemoteMatch installItem,
+            NuGetv3LocalRepository userPackageFolder,
+            PackageExtractionContext packageExtractionContext,
+            CancellationToken token,
+            bool reportPackageProgress)
         {
             var packageIdentity = new PackageIdentity(installItem.Library.Name, installItem.Library.Version);
             IRemoteDependencyProvider provider = installItem.Provider
@@ -419,10 +447,6 @@ namespace NuGet.Commands
 
             try
             {
-                _request.OperationProgressReporter?.ReportPackageInstall(
-                    packageIdentity.Id,
-                    packageIdentity.Version.ToNormalizedString());
-
                 // Check if the package has already been installed.
                 if (!userPackageFolder.Exists(packageIdentity.Id, packageIdentity.Version))
                 {
@@ -481,7 +505,12 @@ namespace NuGet.Commands
             }
             finally
             {
-                _request.OperationProgressReporter?.CompletePackageInstall();
+                if (reportPackageProgress)
+                {
+                    _request.OperationProgressReporter?.CompletePackageInstall(
+                        packageIdentity.Id,
+                        packageIdentity.Version.ToNormalizedString());
+                }
             }
         }
 

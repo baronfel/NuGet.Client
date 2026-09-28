@@ -36,16 +36,19 @@ namespace NuGet.Commands
         void StartPackageInstallBatch(int packageCount);
 
         /// <summary>
-        /// Reports the start of a package candidate installation.
+        /// Reports that a unique package candidate is being checked.
         /// </summary>
         /// <param name="packageId">The package ID.</param>
         /// <param name="packageVersion">The package version.</param>
-        void ReportPackageInstall(string packageId, string packageVersion);
+        /// <returns><see langword="true"/> if this is the first occurrence of the package in the restore operation.</returns>
+        bool TryStartPackageInstall(string packageId, string packageVersion);
 
         /// <summary>
-        /// Reports that a package candidate installation attempt has finished.
+        /// Reports that the first check for a unique package candidate has finished.
         /// </summary>
-        void CompletePackageInstall();
+        /// <param name="packageId">The package ID.</param>
+        /// <param name="packageVersion">The package version.</param>
+        void CompletePackageInstall(string packageId, string packageVersion);
 
         /// <summary>
         /// Reports that a project has finished installing a package batch.

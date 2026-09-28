@@ -828,6 +828,9 @@ namespace NuGet.Commands.Test
                 };
                 await SimpleTestPackageUtility.CreateFullPackageAsync(packageSource.FullName, packageY);
                 var progress = new Mock<IRestoreOperationProgressReporter>();
+                progress
+                    .Setup(p => p.TryStartPackageInstall(It.IsAny<string>(), It.IsAny<string>()))
+                    .Returns(true);
 
                 using (var cacheContext = new SourceCacheContext())
                 {
@@ -864,8 +867,8 @@ namespace NuGet.Commands.Test
                     Assert.True(File.Exists(targetsPath));
                     Assert.True(File.Exists(propsPath));
                     progress.Verify(p => p.StartPackageInstallBatch(2), Times.Once);
-                    progress.Verify(p => p.ReportPackageInstall("y", "1.0.0"), Times.Once);
-                    progress.Verify(p => p.CompletePackageInstall(), Times.Exactly(2));
+                    progress.Verify(p => p.TryStartPackageInstall(It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(2));
+                    progress.Verify(p => p.CompletePackageInstall(It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(2));
                     progress.Verify(p => p.EndPackageInstallBatch(), Times.Once);
                 }
             }

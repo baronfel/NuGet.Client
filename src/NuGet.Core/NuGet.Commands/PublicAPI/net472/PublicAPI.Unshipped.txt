@@ -1,13 +1,13 @@
 #nullable enable
 NuGet.Commands.IRestoreOperationProgressReporter
-NuGet.Commands.IRestoreOperationProgressReporter.CompletePackageInstall() -> void
+NuGet.Commands.IRestoreOperationProgressReporter.CompletePackageInstall(string! packageId, string! packageVersion) -> void
 NuGet.Commands.IRestoreOperationProgressReporter.CompleteProject(string! projectPath, bool commitStarted, bool commitSucceeded, bool isNoOp) -> void
 NuGet.Commands.IRestoreOperationProgressReporter.EndPackageInstallBatch() -> void
-NuGet.Commands.IRestoreOperationProgressReporter.ReportPackageInstall(string! packageId, string! packageVersion) -> void
 NuGet.Commands.IRestoreOperationProgressReporter.StartPackageInstallBatch(int packageCount) -> void
 NuGet.Commands.IRestoreOperationProgressReporter.StartProjectCommit(bool isNoOp) -> void
 NuGet.Commands.IRestoreOperationProgressReporter.Start(int totalProjects) -> void
 NuGet.Commands.IRestoreOperationProgressReporter.StartProject(string! projectPath) -> void
+NuGet.Commands.IRestoreOperationProgressReporter.TryStartPackageInstall(string! packageId, string! packageVersion) -> bool
 NuGet.Commands.AddSourceArgs.MinPublishAgeHours.get -> uint?
 NuGet.Commands.AddSourceArgs.MinPublishAgeHours.set -> void
 NuGet.Commands.UpdateSourceArgs.MinPublishAgeHours.get -> uint?

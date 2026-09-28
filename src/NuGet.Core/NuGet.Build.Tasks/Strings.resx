@@ -170,15 +170,15 @@
     <comment>0 - project count</comment>
   </data>
   <data name="RestoreProgressPackagesTitle" xml:space="preserve">
-    <value>Installing packages</value>
+    <value>Checking unique packages</value>
   </data>
   <data name="RestoreProgressInstallingPackage" xml:space="preserve">
-    <value>Installing {0} {1}</value>
+    <value>Checking {0} {1}</value>
     <comment>0 - package ID, 1 - package version</comment>
   </data>
   <data name="RestoreProgressPackagesStatus" xml:space="preserve">
-    <value>Installing packages {0}/{1}</value>
-    <comment>0 - completed package candidates, 1 - discovered package candidates</comment>
+    <value>Checked unique packages {0}/{1}</value>
+    <comment>0 - completed unique package candidates, 1 - discovered unique package candidates</comment>
   </data>
   <data name="RestoreProgressWaitingForDependencies" xml:space="preserve">
     <value>Waiting for dependency resolution</value>

@@ -3,7 +3,10 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.ExceptionServices;
 using System.Globalization;
 using System.IO;
 using System.Threading;
@@ -15,11 +18,13 @@ namespace NuGet.Build.Tasks
     internal sealed class MSBuildRestoreProgressReporter : IRestoreOperationProgressReporter, IDisposable
     {
         private static readonly long MinimumStatusUpdateInterval = Stopwatch.Frequency / 4;
+        private static readonly TimeSpan ProgressHeartbeatInterval = TimeSpan.FromMilliseconds(250);
 
         private readonly object _overallLock = new();
         private readonly object _packageLock = new();
         private readonly IBuildEngine10? _buildEngine;
         private readonly ITaskProgressReporter? _overallReporter;
+        private readonly ConcurrentDictionary<PackageProgressIdentity, PackageProgressState> _packageProgress = new();
         private ITaskProgressReporter? _packageReporter;
         private int _completedProjects;
         private int _totalProjects;
@@ -33,11 +38,16 @@ namespace NuGet.Build.Tasks
         private long _lastOverallStatusUpdate;
         private long _lastPackageStatusUpdate;
         private int _lastReportedProjectsCompleted;
+        private int _lastReportedProjectsTotal;
         private long _lastReportedPackagesCompleted;
+        private long _lastReportedPackagesTotal;
         private bool _packageOperationFinished;
         private bool _overallOutcomeSet;
         private string _packageStatus = string.Empty;
         private string? _lastCompletedProject;
+        private ExceptionDispatchInfo? _heartbeatException;
+        private Timer? _overallHeartbeatTimer;
+        private Timer? _packageHeartbeatTimer;
 
         internal MSBuildRestoreProgressReporter(IBuildEngine? buildEngine)
         {
@@ -50,10 +60,19 @@ namespace NuGet.Build.Tasks
                 0,
                 null,
                 GetResourceString("RestoreProgressPreparing")));
+            if (_overallReporter is not null)
+            {
+                _overallHeartbeatTimer = new Timer(
+                    ReportOverallHeartbeat,
+                    null,
+                    ProgressHeartbeatInterval,
+                    ProgressHeartbeatInterval);
+            }
         }
 
         public void Start(int totalProjects)
         {
+            ThrowIfHeartbeatFailed();
             Interlocked.Exchange(ref _totalProjects, totalProjects);
             Interlocked.Exchange(ref _projectsResolving, totalProjects);
             Interlocked.Exchange(ref _projectsRemainingResolution, totalProjects);
@@ -62,11 +81,13 @@ namespace NuGet.Build.Tasks
 
         public void StartProject(string projectPath)
         {
+            ThrowIfHeartbeatFailed();
             ReportOverallProgress(force: false);
         }
 
         public void StartPackageInstallBatch(int packageCount)
         {
+            ThrowIfHeartbeatFailed();
             if (packageCount <= 0)
             {
                 return;
@@ -78,42 +99,68 @@ namespace NuGet.Build.Tasks
 
             lock (_packageLock)
             {
-                Interlocked.Add(ref _packagesTotal, packageCount);
-
                 if (_packageOperationFinished)
                 {
                     return;
                 }
 
-                bool isFirstBatch = _packageReporter is null;
-                if (isFirstBatch)
-                {
-                    _packageReporter = _buildEngine?.EngineServices.CreateTaskProgressReporter(
-                        GetResourceString("RestoreProgressPackagesTitle"),
-                        TaskProgressUnit.Items);
-                    _packageStatus = GetResourceString("RestoreProgressPackagesTitle");
-                }
-
-                ReportPackageProgress(force: isFirstBatch);
+                ReportPackageProgress(force: false);
             }
         }
 
-        public void ReportPackageInstall(string packageId, string packageVersion)
+        public bool TryStartPackageInstall(string packageId, string packageVersion)
         {
+            ThrowIfHeartbeatFailed();
+            if (_buildEngine is null)
+            {
+                return false;
+            }
+
+            var identity = new PackageProgressIdentity(packageId, packageVersion);
+            if (!_packageProgress.TryAdd(identity, PackageProgressState.Started))
+            {
+                return false;
+            }
+
+            Interlocked.Increment(ref _packagesTotal);
             lock (_packageLock)
             {
+                if (_packageOperationFinished)
+                {
+                    throw new InvalidOperationException("A package candidate was discovered after package progress completed.");
+                }
+
+                _packageReporter ??= _buildEngine.EngineServices.CreateTaskProgressReporter(
+                    GetResourceString("RestoreProgressPackagesTitle"),
+                    TaskProgressUnit.Items);
                 _packageStatus = string.Format(
                     CultureInfo.CurrentCulture,
                     GetResourceString("RestoreProgressInstallingPackage"),
                     packageId,
                     packageVersion);
+                if (_packageHeartbeatTimer is null && _packageReporter is not null)
+                {
+                    _packageHeartbeatTimer = new Timer(
+                        ReportPackageHeartbeat,
+                        null,
+                        ProgressHeartbeatInterval,
+                        ProgressHeartbeatInterval);
+                }
             }
 
-            ReportPackageProgress(force: false);
+            ReportPackageProgress(force: true);
+            return true;
         }
 
-        public void CompletePackageInstall()
+        public void CompletePackageInstall(string packageId, string packageVersion)
         {
+            ThrowIfHeartbeatFailed();
+            var identity = new PackageProgressIdentity(packageId, packageVersion);
+            if (!_packageProgress.TryUpdate(identity, PackageProgressState.Completed, PackageProgressState.Started))
+            {
+                throw new InvalidOperationException("A package candidate was completed without a unique start notification.");
+            }
+
             Interlocked.Increment(ref _packagesCompleted);
 
             lock (_packageLock)
@@ -122,11 +169,13 @@ namespace NuGet.Build.Tasks
             }
 
             ReportPackageProgress(force: false);
+            ReportOverallProgress(force: false);
             TryCompletePackageOperation();
         }
 
         public void EndPackageInstallBatch()
         {
+            ThrowIfHeartbeatFailed();
             Interlocked.Decrement(ref _projectsInstalling);
             Interlocked.Increment(ref _projectsResolving);
 
@@ -147,6 +196,7 @@ namespace NuGet.Build.Tasks
 
         public void StartProjectCommit(bool isNoOp)
         {
+            ThrowIfHeartbeatFailed();
             Interlocked.Decrement(ref _projectsResolving);
             Interlocked.Decrement(ref _projectsRemainingResolution);
 
@@ -165,6 +215,7 @@ namespace NuGet.Build.Tasks
 
         public void CompleteProject(string projectPath, bool commitStarted, bool commitSucceeded, bool isNoOp)
         {
+            ThrowIfHeartbeatFailed();
             if (!commitStarted)
             {
                 Interlocked.Decrement(ref _projectsResolving);
@@ -195,6 +246,7 @@ namespace NuGet.Build.Tasks
 
         internal void Complete()
         {
+            ThrowIfHeartbeatFailed();
             CompletePackageOperation();
             SetOverallOutcome(static reporter => reporter.Complete());
         }
@@ -215,12 +267,16 @@ namespace NuGet.Build.Tasks
         {
             lock (_packageLock)
             {
+                _packageHeartbeatTimer?.Dispose();
+                _packageHeartbeatTimer = null;
                 _packageReporter?.Dispose();
                 _packageReporter = null;
             }
 
             lock (_overallLock)
             {
+                _overallHeartbeatTimer?.Dispose();
+                _overallHeartbeatTimer = null;
                 _overallReporter?.Dispose();
             }
         }
@@ -245,6 +301,8 @@ namespace NuGet.Build.Tasks
 
                 _packageStatus = GetPackageProgressStatus();
                 ReportPackageProgress(force: true);
+                _packageHeartbeatTimer?.Dispose();
+                _packageHeartbeatTimer = null;
                 ITaskProgressReporter reporter = _packageReporter;
                 _packageReporter = null;
                 _packageOperationFinished = true;
@@ -272,6 +330,8 @@ namespace NuGet.Build.Tasks
                     return;
                 }
 
+                _packageHeartbeatTimer?.Dispose();
+                _packageHeartbeatTimer = null;
                 ITaskProgressReporter reporter = _packageReporter;
                 _packageReporter = null;
                 _packageOperationFinished = true;
@@ -290,20 +350,25 @@ namespace NuGet.Build.Tasks
                 }
 
                 long now = Stopwatch.GetTimestamp();
+                int completed = Math.Max(
+                    _lastReportedProjectsCompleted,
+                    Volatile.Read(ref _completedProjects));
+                int totalProjects = Volatile.Read(ref _totalProjects);
+                long? total = totalProjects > 0 ? totalProjects : null;
+                int reportedTotal = totalProjects > 0 ? totalProjects : 0;
+                bool progressChanged = completed != _lastReportedProjectsCompleted ||
+                    reportedTotal != _lastReportedProjectsTotal;
                 if (!force &&
+                    !progressChanged &&
                     _lastOverallStatusUpdate != 0 &&
                     now - _lastOverallStatusUpdate < MinimumStatusUpdateInterval)
                 {
                     return;
                 }
 
-                int completed = Math.Max(
-                    _lastReportedProjectsCompleted,
-                    Volatile.Read(ref _completedProjects));
-                int total = Volatile.Read(ref _totalProjects);
-
                 _overallReporter.Report(new TaskProgressUpdate(completed, total, GetOverallStatus()));
                 _lastReportedProjectsCompleted = completed;
+                _lastReportedProjectsTotal = reportedTotal;
                 _lastOverallStatusUpdate = now;
             }
         }
@@ -318,20 +383,23 @@ namespace NuGet.Build.Tasks
                 }
 
                 long now = Stopwatch.GetTimestamp();
+                long completed = Math.Max(
+                    _lastReportedPackagesCompleted,
+                    Volatile.Read(ref _packagesCompleted));
+                long total = Volatile.Read(ref _packagesTotal);
+                bool progressChanged = completed != _lastReportedPackagesCompleted ||
+                    total != _lastReportedPackagesTotal;
                 if (!force &&
+                    !progressChanged &&
                     _lastPackageStatusUpdate != 0 &&
                     now - _lastPackageStatusUpdate < MinimumStatusUpdateInterval)
                 {
                     return;
                 }
 
-                long completed = Math.Max(
-                    _lastReportedPackagesCompleted,
-                    Volatile.Read(ref _packagesCompleted));
-                long total = Volatile.Read(ref _packagesTotal);
-
                 _packageReporter.Report(new TaskProgressUpdate(completed, total, _packageStatus));
                 _lastReportedPackagesCompleted = completed;
+                _lastReportedPackagesTotal = total;
                 _lastPackageStatusUpdate = now;
             }
         }
@@ -346,9 +414,54 @@ namespace NuGet.Build.Tasks
                 }
 
                 ReportOverallProgress(force: true);
+                _overallHeartbeatTimer?.Dispose();
+                _overallHeartbeatTimer = null;
                 _overallOutcomeSet = true;
                 finish(_overallReporter);
             }
+        }
+
+        [SuppressMessage(
+            "Design",
+            "CA1031:DoNotCatchGeneralExceptionTypes",
+            Justification = "Timer callback failures are retained and rethrown on the restore task thread.")]
+        private void ReportOverallHeartbeat(object? state)
+        {
+            try
+            {
+                ReportOverallProgress(force: true);
+            }
+            catch (Exception exception)
+            {
+                Interlocked.CompareExchange(
+                    ref _heartbeatException,
+                    ExceptionDispatchInfo.Capture(exception),
+                    null);
+            }
+        }
+
+        [SuppressMessage(
+            "Design",
+            "CA1031:DoNotCatchGeneralExceptionTypes",
+            Justification = "Timer callback failures are retained and rethrown on the restore task thread.")]
+        private void ReportPackageHeartbeat(object? state)
+        {
+            try
+            {
+                ReportPackageProgress(force: true);
+            }
+            catch (Exception exception)
+            {
+                Interlocked.CompareExchange(
+                    ref _heartbeatException,
+                    ExceptionDispatchInfo.Capture(exception),
+                    null);
+            }
+        }
+
+        private void ThrowIfHeartbeatFailed()
+        {
+            Volatile.Read(ref _heartbeatException)?.Throw();
         }
 
         private string GetOverallStatus()
@@ -394,6 +507,45 @@ namespace NuGet.Build.Tasks
         {
             return Strings.ResourceManager.GetString(name, Strings.Culture)
                 ?? throw new InvalidOperationException($"The resource '{name}' was not found.");
+        }
+
+        private readonly struct PackageProgressIdentity : IEquatable<PackageProgressIdentity>
+        {
+            internal PackageProgressIdentity(string packageId, string packageVersion)
+            {
+                PackageId = packageId;
+                PackageVersion = packageVersion;
+            }
+
+            private string PackageId { get; }
+
+            private string PackageVersion { get; }
+
+            public bool Equals(PackageProgressIdentity other)
+            {
+                return StringComparer.OrdinalIgnoreCase.Equals(PackageId, other.PackageId) &&
+                    StringComparer.Ordinal.Equals(PackageVersion, other.PackageVersion);
+            }
+
+            public override bool Equals(object? obj)
+            {
+                return obj is PackageProgressIdentity other && Equals(other);
+            }
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    return (StringComparer.OrdinalIgnoreCase.GetHashCode(PackageId) * 397) ^
+                        StringComparer.Ordinal.GetHashCode(PackageVersion);
+                }
+            }
+        }
+
+        private enum PackageProgressState
+        {
+            Started,
+            Completed
         }
     }
 }
