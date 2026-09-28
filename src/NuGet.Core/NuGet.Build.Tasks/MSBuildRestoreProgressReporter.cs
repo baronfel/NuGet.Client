@@ -20,11 +20,6 @@ namespace NuGet.Build.Tasks
         Justification = "Progress reporting must never fail a restore. Failures stop the affected progress operation and are logged.")]
     internal sealed class MSBuildRestoreProgressReporter : IRestoreOperationProgressReporter, IDisposable
     {
-        // MSBuild forwards at most one update per operation every 150ms and drops the rest without a trailing flush.
-        // Reporting no more often than this keeps every reported frame visible; the heartbeat flushes pending changes.
-        private static readonly long MinimumReportInterval = Stopwatch.Frequency / 5;
-        private static readonly TimeSpan ProgressHeartbeatInterval = TimeSpan.FromMilliseconds(100);
-
         private readonly object _overallLock = new();
         private readonly object _packageLock = new();
         private readonly IBuildEngine10? _buildEngine;
@@ -42,8 +37,6 @@ namespace NuGet.Build.Tasks
         private int _projectsRemainingResolution;
         private long _packagesTotal;
         private long _packagesCompleted;
-        private long _lastOverallStatusUpdate;
-        private long _lastPackageStatusUpdate;
         private int _lastReportedProjectsCompleted;
         private int _lastReportedProjectsTotal;
         private string? _lastReportedOverallStatus;
@@ -54,8 +47,6 @@ namespace NuGet.Build.Tasks
         private bool _overallOutcomeSet;
         private string _packageStatus = string.Empty;
         private string? _lastCompletedProject;
-        private Timer? _overallHeartbeatTimer;
-        private Timer? _packageHeartbeatTimer;
 
         internal MSBuildRestoreProgressReporter(IBuildEngine? buildEngine, Common.ILogger? log = null)
         {
@@ -75,12 +66,6 @@ namespace NuGet.Build.Tasks
                 string status = GetResourceString("RestoreProgressPreparing");
                 _overallReporter.Report(new TaskProgressUpdate(0, null, status));
                 _lastReportedOverallStatus = status;
-                _lastOverallStatusUpdate = Stopwatch.GetTimestamp();
-                _overallHeartbeatTimer = new Timer(
-                    ReportOverallHeartbeat,
-                    null,
-                    ProgressHeartbeatInterval,
-                    ProgressHeartbeatInterval);
             }
             catch (Exception exception)
             {
@@ -93,12 +78,12 @@ namespace NuGet.Build.Tasks
             Interlocked.Exchange(ref _totalProjects, totalProjects);
             Interlocked.Exchange(ref _projectsResolving, totalProjects);
             Interlocked.Exchange(ref _projectsRemainingResolution, totalProjects);
-            ReportOverallProgress(final: false);
+            ReportOverallProgress();
         }
 
         public void StartProject(string projectPath)
         {
-            ReportOverallProgress(final: false);
+            ReportOverallProgress();
         }
 
         public void StartPackageInstallBatch(int packageCount)
@@ -110,8 +95,8 @@ namespace NuGet.Build.Tasks
 
             Interlocked.Decrement(ref _projectsResolving);
             Interlocked.Increment(ref _projectsInstalling);
-            ReportOverallProgress(final: false);
-            ReportPackageProgress(final: false);
+            ReportOverallProgress();
+            ReportPackageProgress();
         }
 
         public bool TryStartPackageInstall(string packageId, string packageVersion)
@@ -146,14 +131,6 @@ namespace NuGet.Build.Tasks
                         GetResourceString("RestoreProgressPackagesTitle"),
                         TaskProgressUnit.Items);
                     _packageStatus = GetPackageProgressStatus();
-                    if (_packageHeartbeatTimer is null && _packageReporter is not null)
-                    {
-                        _packageHeartbeatTimer = new Timer(
-                            ReportPackageHeartbeat,
-                            null,
-                            ProgressHeartbeatInterval,
-                            ProgressHeartbeatInterval);
-                    }
                 }
                 catch (Exception exception)
                 {
@@ -162,7 +139,7 @@ namespace NuGet.Build.Tasks
                 }
             }
 
-            ReportPackageProgress(final: false);
+            ReportPackageProgress();
             return true;
         }
 
@@ -197,8 +174,8 @@ namespace NuGet.Build.Tasks
                 }
             }
 
-            ReportPackageProgress(final: false);
-            ReportOverallProgress(final: false);
+            ReportPackageProgress();
+            ReportOverallProgress();
             TryCompletePackageOperation();
         }
 
@@ -225,10 +202,10 @@ namespace NuGet.Build.Tasks
                     }
                 }
 
-                ReportPackageProgress(final: false);
+                ReportPackageProgress();
             }
 
-            ReportOverallProgress(final: false);
+            ReportOverallProgress();
             TryCompletePackageOperation();
         }
 
@@ -246,7 +223,7 @@ namespace NuGet.Build.Tasks
                 Interlocked.Increment(ref _projectsCommitting);
             }
 
-            ReportOverallProgress(final: false);
+            ReportOverallProgress();
             TryCompletePackageOperation();
         }
 
@@ -268,7 +245,7 @@ namespace NuGet.Build.Tasks
                 Volatile.Write(ref _lastCompletedProject, Path.GetFileName(projectPath));
             }
 
-            ReportOverallProgress(final: false);
+            ReportOverallProgress();
             TryCompletePackageOperation();
         }
 
@@ -300,30 +277,22 @@ namespace NuGet.Build.Tasks
 
         public void Dispose()
         {
-            Timer? packageTimer;
             ITaskProgressReporter? packageReporter;
             lock (_packageLock)
             {
-                packageTimer = _packageHeartbeatTimer;
-                _packageHeartbeatTimer = null;
                 packageReporter = _packageReporter;
                 _packageReporter = null;
                 _packageOperationFinished = true;
             }
 
-            Timer? overallTimer;
             ITaskProgressReporter? overallReporter;
             lock (_overallLock)
             {
-                overallTimer = _overallHeartbeatTimer;
-                _overallHeartbeatTimer = null;
                 overallReporter = _overallReporter;
                 _overallReporter = null;
                 _overallOutcomeSet = true;
             }
 
-            packageTimer?.Dispose();
-            overallTimer?.Dispose();
             TryDispose(packageReporter);
             TryDispose(overallReporter);
         }
@@ -356,14 +325,13 @@ namespace NuGet.Build.Tasks
                     return;
                 }
 
-                ReportPackageProgress(final: true);
+                ReportPackageProgress();
                 FinishPackageOperation(static reporter => reporter.Complete());
             }
         }
 
         private void FinishPackageOperation(Action<ITaskProgressReporter> finish)
         {
-            Timer? timer;
             ITaskProgressReporter? reporter;
             lock (_packageLock)
             {
@@ -372,14 +340,11 @@ namespace NuGet.Build.Tasks
                     return;
                 }
 
-                timer = _packageHeartbeatTimer;
-                _packageHeartbeatTimer = null;
                 reporter = _packageReporter;
                 _packageReporter = null;
                 _packageOperationFinished = true;
             }
 
-            timer?.Dispose();
             try
             {
                 finish(reporter);
@@ -396,7 +361,6 @@ namespace NuGet.Build.Tasks
 
         private void StopPackageOperation(string reason)
         {
-            Timer? timer;
             ITaskProgressReporter? reporter;
             lock (_packageLock)
             {
@@ -405,21 +369,17 @@ namespace NuGet.Build.Tasks
                     return;
                 }
 
-                timer = _packageHeartbeatTimer;
-                _packageHeartbeatTimer = null;
                 reporter = _packageReporter;
                 _packageReporter = null;
                 _packageOperationFinished = true;
             }
 
-            timer?.Dispose();
             TryDispose(reporter);
             LogReportingStopped("RestoreProgressPackagesTitle", reason);
         }
 
         private void StopOverallOperation(string reason)
         {
-            Timer? timer;
             ITaskProgressReporter? reporter;
             lock (_overallLock)
             {
@@ -428,19 +388,16 @@ namespace NuGet.Build.Tasks
                     return;
                 }
 
-                timer = _overallHeartbeatTimer;
-                _overallHeartbeatTimer = null;
                 reporter = _overallReporter;
                 _overallReporter = null;
                 _overallOutcomeSet = true;
             }
 
-            timer?.Dispose();
             TryDispose(reporter);
             LogReportingStopped("RestoreProgressTitle", reason);
         }
 
-        private void ReportOverallProgress(bool final)
+        private void ReportOverallProgress()
         {
             lock (_overallLock)
             {
@@ -465,18 +422,10 @@ namespace NuGet.Build.Tasks
                         return;
                     }
 
-                    long now = Stopwatch.GetTimestamp();
-                    if (!final && now - _lastOverallStatusUpdate < MinimumReportInterval)
-                    {
-                        // The heartbeat flushes this change after the throttle window.
-                        return;
-                    }
-
                     _overallReporter.Report(new TaskProgressUpdate(completed, total, status));
                     _lastReportedProjectsCompleted = completed;
                     _lastReportedProjectsTotal = reportedTotal;
                     _lastReportedOverallStatus = status;
-                    _lastOverallStatusUpdate = now;
                 }
                 catch (Exception exception)
                 {
@@ -485,7 +434,7 @@ namespace NuGet.Build.Tasks
             }
         }
 
-        private void ReportPackageProgress(bool final)
+        private void ReportPackageProgress()
         {
             lock (_packageLock)
             {
@@ -508,18 +457,10 @@ namespace NuGet.Build.Tasks
                         return;
                     }
 
-                    long now = Stopwatch.GetTimestamp();
-                    if (!final && now - _lastPackageStatusUpdate < MinimumReportInterval)
-                    {
-                        // The heartbeat flushes this change after the throttle window.
-                        return;
-                    }
-
                     _packageReporter.Report(new TaskProgressUpdate(completed, total, status));
                     _lastReportedPackagesCompleted = completed;
                     _lastReportedPackagesTotal = total;
                     _lastReportedPackageStatus = status;
-                    _lastPackageStatusUpdate = now;
                 }
                 catch (Exception exception)
                 {
@@ -530,9 +471,8 @@ namespace NuGet.Build.Tasks
 
         private void SetOverallOutcome(Action<ITaskProgressReporter> finish)
         {
-            ReportOverallProgress(final: true);
+            ReportOverallProgress();
 
-            Timer? timer;
             ITaskProgressReporter? reporter;
             lock (_overallLock)
             {
@@ -541,13 +481,10 @@ namespace NuGet.Build.Tasks
                     return;
                 }
 
-                timer = _overallHeartbeatTimer;
-                _overallHeartbeatTimer = null;
                 reporter = _overallReporter;
                 _overallOutcomeSet = true;
             }
 
-            timer?.Dispose();
             try
             {
                 finish(reporter);
@@ -556,16 +493,6 @@ namespace NuGet.Build.Tasks
             {
                 LogReportingStopped("RestoreProgressTitle", exception.ToString());
             }
-        }
-
-        private void ReportOverallHeartbeat(object? state)
-        {
-            ReportOverallProgress(final: false);
-        }
-
-        private void ReportPackageHeartbeat(object? state)
-        {
-            ReportPackageProgress(final: false);
         }
 
         private void LogReportingStopped(string titleResourceName, string reason)
@@ -639,7 +566,9 @@ namespace NuGet.Build.Tasks
                 return FormatResourceString("RestoreProgressInstallingPackage", package.PackageId, package.PackageVersion);
             }
 
-            return GetResourceString("RestoreProgressPackagesInstalled");
+            return Volatile.Read(ref _projectsRemainingResolution) > 0
+                ? GetResourceString("RestoreProgressWaitingForDependencies")
+                : GetResourceString("RestoreProgressPackagesInstalled");
         }
 
         private static void AddPhaseStatus(List<string> phases, string resourceName, int count)

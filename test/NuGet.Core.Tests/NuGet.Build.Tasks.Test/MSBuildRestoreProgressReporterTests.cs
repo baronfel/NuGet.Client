@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using Microsoft.Build.Framework;
 using NuGet.Test.Utility;
 using Xunit;
@@ -75,20 +74,25 @@ namespace NuGet.Build.Tasks.Test
         }
 
         [Fact]
-        public void Heartbeat_WhenContentDoesNotChange_DoesNotReportDuplicateUpdates()
+        public void Report_WhenContentDoesNotChange_SkipsUpdateAndReportsEveryChange()
         {
             var engine = new ProgressBuildEngine();
 
             using (var reporter = new MSBuildRestoreProgressReporter(engine))
             {
                 reporter.Start(2);
-
-                // Several heartbeat intervals pass without a change in restore state.
-                Thread.Sleep(TimeSpan.FromSeconds(1));
+                reporter.StartProject("project1.csproj");
+                reporter.StartProject("project2.csproj");
+                reporter.StartProjectCommit(isNoOp: false);
+                reporter.CompleteProject("project1.csproj", commitStarted: true, commitSucceeded: true, isNoOp: false);
 
                 RecordingProgressReporter restore = engine.Reporters.Single(r => r.Title == RestoreTitle);
                 IReadOnlyList<TaskProgressUpdate> updates = restore.Updates;
-                Assert.Equal(2, updates.Count);
+
+                // Initial status, Start, commit, and completion each change content; StartProject does not.
+                Assert.Equal(4, updates.Count);
+                Assert.Equal(1, updates.Last().Completed);
+                Assert.Equal(2, updates.Last().Total);
                 for (int i = 1; i < updates.Count; i++)
                 {
                     Assert.False(
