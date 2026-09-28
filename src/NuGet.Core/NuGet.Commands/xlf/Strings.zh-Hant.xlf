@@ -938,6 +938,11 @@ Upgrade your .NET SDK or remove RestoreUseLegacyDependencyResolver to use this f
         <target state="translated">'{0}' 的還原輸入尚未變更。無須進一步的動作來完成還原。</target>
         <note />
       </trans-unit>
+      <trans-unit id="Log_RestoreProgressReportingFailed">
+        <source>Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</source>
+        <target state="new">Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</target>
+        <note>{0} - exception details</note>
+      </trans-unit>
       <trans-unit id="Log_RestoringPackages">
         <source>Restoring packages for {0}...</source>
         <target state="translated">正在還原 {0} 的封裝...</target>

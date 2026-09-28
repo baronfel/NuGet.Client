@@ -938,6 +938,11 @@ Bu özelliği kullanmak için .NET SDK'nizi yükseltin veya RestoreUseLegacyDepe
         <target state="translated">'{0}' için geri yükleme girişleri değiştirilmedi. Geri yüklemeyi tamamlamak için başka bir eylem gerekli değil.</target>
         <note />
       </trans-unit>
+      <trans-unit id="Log_RestoreProgressReportingFailed">
+        <source>Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</source>
+        <target state="new">Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</target>
+        <note>{0} - exception details</note>
+      </trans-unit>
       <trans-unit id="Log_RestoringPackages">
         <source>Restoring packages for {0}...</source>
         <target state="translated">{0} için paketler geri yükleniyor...</target>

@@ -938,6 +938,11 @@ Atualize o SDK do .NET ou remova RestoreUseLegacyDependencyResolver para usar es
         <target state="translated">As entradas de restauração de '{0}' não foram alteradas. Nenhuma ação é necessária para concluir a restauração.</target>
         <note />
       </trans-unit>
+      <trans-unit id="Log_RestoreProgressReportingFailed">
+        <source>Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</source>
+        <target state="new">Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</target>
+        <note>{0} - exception details</note>
+      </trans-unit>
       <trans-unit id="Log_RestoringPackages">
         <source>Restoring packages for {0}...</source>
         <target state="translated">Restaurando pacotes para {0}...</target>

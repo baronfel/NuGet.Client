@@ -170,18 +170,29 @@
     <comment>0 - project count</comment>
   </data>
   <data name="RestoreProgressPackagesTitle" xml:space="preserve">
-    <value>Checking unique packages</value>
+    <value>Installing packages</value>
   </data>
   <data name="RestoreProgressInstallingPackage" xml:space="preserve">
-    <value>Checking {0} {1}</value>
+    <value>Installing {0} {1}</value>
     <comment>0 - package ID, 1 - package version</comment>
   </data>
-  <data name="RestoreProgressPackagesStatus" xml:space="preserve">
-    <value>Checked unique packages {0}/{1}</value>
-    <comment>0 - completed unique package candidates, 1 - discovered unique package candidates</comment>
+  <data name="RestoreProgressPackagesInstalled" xml:space="preserve">
+    <value>Packages installed</value>
   </data>
   <data name="RestoreProgressWaitingForDependencies" xml:space="preserve">
     <value>Waiting for dependency resolution</value>
+  </data>
+  <data name="RestoreProgressPackageAfterCompletion" xml:space="preserve">
+    <value>Package {0} {1} was discovered after package progress completed.</value>
+    <comment>0 - package ID, 1 - package version</comment>
+  </data>
+  <data name="RestoreProgressPackageMismatch" xml:space="preserve">
+    <value>Package {0} {1} completed without a matching start notification.</value>
+    <comment>0 - package ID, 1 - package version</comment>
+  </data>
+  <data name="RestoreProgressReportingStopped" xml:space="preserve">
+    <value>Progress reporting for '{0}' stopped. Restore continues. {1}</value>
+    <comment>0 - progress operation title, 1 - reason</comment>
   </data>
   <data name="RestoreProgressTitle" xml:space="preserve">
     <value>Restoring projects</value>

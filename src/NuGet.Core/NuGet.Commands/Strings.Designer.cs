@@ -1672,6 +1672,15 @@ namespace NuGet.Commands {
                 return ResourceManager.GetString("Log_RestoreNoOpFinish", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}.
+        /// </summary>
+        internal static string Log_RestoreProgressReportingFailed {
+            get {
+                return ResourceManager.GetString("Log_RestoreProgressReportingFailed", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Restoring packages for {0}....

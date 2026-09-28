@@ -938,6 +938,11 @@ Mettez à niveau votre Kit de développement logiciel (SDK) .NET ou supprimez Re
         <target state="translated">Les entrées de restauration pour '{0}' n'ont pas changé. Aucune autre action n'est nécessaire pour effectuer la restauration.</target>
         <note />
       </trans-unit>
+      <trans-unit id="Log_RestoreProgressReportingFailed">
+        <source>Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</source>
+        <target state="new">Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</target>
+        <note>{0} - exception details</note>
+      </trans-unit>
       <trans-unit id="Log_RestoringPackages">
         <source>Restoring packages for {0}...</source>
         <target state="translated">Restauration des packages pour {0}...</target>

@@ -77,7 +77,7 @@ namespace NuGet.Commands
             var requests = new Queue<RestoreSummaryRequest>(restoreRequests);
             var restoreTasks = new List<Task<RestoreSummary>>(maxTasks);
             var restoreSummaries = new List<RestoreSummary>(requests.Count);
-            var operationProgress = restoreArgs.ProgressReporter as IRestoreOperationProgressReporter;
+            IRestoreOperationProgressReporter? operationProgress = FailSafeRestoreOperationProgressReporter.Create(restoreArgs.ProgressReporter, log);
 
             operationProgress?.Start(requests.Count);
 

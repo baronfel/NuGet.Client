@@ -938,6 +938,11 @@ Upgradujte svou sadu .NET SDK nebo odeberte RestoreUseLegacyDependencyResolver, 
         <target state="translated">Vstupy obnovení pro {0} se nezměnily. K dokončení obnovování se nevyžaduje žádná další akce.</target>
         <note />
       </trans-unit>
+      <trans-unit id="Log_RestoreProgressReportingFailed">
+        <source>Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</source>
+        <target state="new">Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</target>
+        <note>{0} - exception details</note>
+      </trans-unit>
       <trans-unit id="Log_RestoringPackages">
         <source>Restoring packages for {0}...</source>
         <target state="translated">Obnovují se balíčky pro {0}...</target>

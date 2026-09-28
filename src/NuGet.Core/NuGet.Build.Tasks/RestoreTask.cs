@@ -238,7 +238,7 @@ namespace NuGet.Build.Tasks
                 return true;
             }
 
-            _progressReporter = new MSBuildRestoreProgressReporter(BuildEngine);
+            _progressReporter = new MSBuildRestoreProgressReporter(BuildEngine, log);
 
             // Convert to the internal wrapper
             var wrappedItems = RestoreGraphItems.Select(MSBuildUtility.WrapMSBuildItem);

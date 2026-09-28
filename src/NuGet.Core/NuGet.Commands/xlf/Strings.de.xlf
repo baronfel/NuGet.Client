@@ -938,6 +938,11 @@ Aktualisieren Sie Ihr .NET SDK oder entfernen Sie RestoreUseLegacyDependencyReso
         <target state="translated">Die Wiederherstellungseingaben für "{0}" wurden nicht geändert. Zum Abschließen der Wiederherstellung sind keine weiteren Aktionen erforderlich.</target>
         <note />
       </trans-unit>
+      <trans-unit id="Log_RestoreProgressReportingFailed">
+        <source>Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</source>
+        <target state="new">Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</target>
+        <note>{0} - exception details</note>
+      </trans-unit>
       <trans-unit id="Log_RestoringPackages">
         <source>Restoring packages for {0}...</source>
         <target state="translated">Pakete für "{0}" werden wiederhergestellt...</target>

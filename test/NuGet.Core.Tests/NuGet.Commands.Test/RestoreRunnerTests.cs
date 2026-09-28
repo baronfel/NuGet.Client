@@ -778,6 +778,78 @@ namespace NuGet.Commands.Test
         }
 
         [Fact]
+        public async Task RestoreRunner_ProgressReporterThrows_RestoreSucceedsAndStopsReportingAsync()
+        {
+            // Arrange
+            var packageSpec = @"
+            {
+              ""version"": ""1.0.0"",
+              ""frameworks"": {
+                ""net45"": {
+                    ""dependencies"": {
+                        ""x"": ""1.0.0""
+                    }
+                }
+              }
+            }";
+
+            using (var workingDir = TestDirectory.Create())
+            {
+                var globalPackagesFolder = new DirectoryInfo(Path.Combine(workingDir, "globalPackages")); globalPackagesFolder.Create();
+                var packageSource = new DirectoryInfo(Path.Combine(workingDir, "packageSource")); packageSource.Create();
+                var projectSpec = ProjectTestHelpers.GetPackageSpecWithProjectNameAndSpec("project1", Path.Combine(workingDir, "projects"), packageSpec);
+                var sources = new List<PackageSource>() { new PackageSource(packageSource.FullName) };
+                projectSpec.RestoreMetadata.Sources = sources;
+                projectSpec.RestoreMetadata.PackagesPath = globalPackagesFolder.FullName;
+                var dgFile = new DependencyGraphSpec();
+                dgFile.AddProject(projectSpec);
+                dgFile.AddRestore(projectSpec.RestoreMetadata.ProjectUniqueName);
+                await SimpleTestPackageUtility.CreateFullPackageAsync(
+                    packageSource.FullName,
+                    new SimpleTestPackageContext() { Id = "x", Version = "1.0.0" });
+
+                // A progress bookkeeping bug, such as a start/complete mismatch, must not fail the restore.
+                var progress = new Mock<IRestoreOperationProgressReporter>();
+                progress
+                    .Setup(p => p.TryStartPackageInstall(It.IsAny<string>(), It.IsAny<string>()))
+                    .Returns(true);
+                progress
+                    .Setup(p => p.CompletePackageInstall(It.IsAny<string>(), It.IsAny<string>()))
+                    .Throws(new InvalidOperationException("Progress bookkeeping mismatch."));
+                var logger = new TestLogger();
+
+                using (var cacheContext = new SourceCacheContext())
+                {
+                    var restoreContext = new RestoreArgs()
+                    {
+                        CacheContext = cacheContext,
+                        DisableParallel = true,
+                        Log = logger,
+                        ProgressReporter = progress.Object,
+                        CachingSourceProvider = new CachingSourceProvider(new TestPackageSourceProvider(sources)),
+                        PreLoadedRequestProviders = new List<IPreLoadedRestoreRequestProvider>()
+                        {
+                            new DependencyGraphSpecRequestProvider(new RestoreCommandProvidersCache(), dgFile)
+                        }
+                    };
+
+                    // Act
+                    var summaries = await RestoreRunner.RunAsync(restoreContext);
+                    var summary = summaries.Single();
+
+                    // Assert
+                    Assert.True(summary.Success, "Failed: " + string.Join(Environment.NewLine, logger.Messages));
+                    Assert.True(Directory.Exists(Path.Combine(globalPackagesFolder.FullName, "x", "1.0.0")));
+                    Assert.True(File.Exists(Path.Combine(projectSpec.RestoreMetadata.OutputPath, "project.assets.json")));
+                    progress.Verify(p => p.CompletePackageInstall("x", "1.0.0"), Times.Once);
+                    progress.Verify(p => p.EndPackageInstallBatch(), Times.Never);
+                    progress.Verify(p => p.CompleteProject(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Never);
+                    Assert.Contains(logger.Messages, message => message.Contains("Progress bookkeeping mismatch."));
+                }
+            }
+        }
+
+        [Fact]
         public async Task RestoreRunner_BasicPackageDownloadRestoreAsync()
         {
             // Arrange

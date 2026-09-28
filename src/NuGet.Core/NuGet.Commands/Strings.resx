@@ -234,6 +234,10 @@
   <data name="Log_RunningParallelRestore" xml:space="preserve">
     <value>Running restore with {0} concurrent jobs.</value>
   </data>
+  <data name="Log_RestoreProgressReportingFailed" xml:space="preserve">
+    <value>Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</value>
+    <comment>{0} - exception details</comment>
+  </data>
   <data name="Error_InvalidCommandLineInput" xml:space="preserve">
     <value>Invalid input '{0}'. The file type was not recognized.</value>
   </data>

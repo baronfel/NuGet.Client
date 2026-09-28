@@ -938,6 +938,11 @@ Per usare questa funzionalità, aggiornare .NET SDK o rimuovere RestoreUseLegacy
         <target state="translated">Gli input del ripristino per '{0}' non sono stati modificati. Non sono richieste ulteriori azioni per completare il ripristino.</target>
         <note />
       </trans-unit>
+      <trans-unit id="Log_RestoreProgressReportingFailed">
+        <source>Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</source>
+        <target state="new">Restore progress reporting stopped because the progress reporter failed. Restore continues. {0}</target>
+        <note>{0} - exception details</note>
+      </trans-unit>
       <trans-unit id="Log_RestoringPackages">
         <source>Restoring packages for {0}...</source>
         <target state="translated">Ripristino dei pacchetti per {0} in corso...</target>
