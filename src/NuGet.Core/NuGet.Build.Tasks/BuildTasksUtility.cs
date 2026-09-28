@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -77,7 +75,7 @@ namespace NuGet.Build.Tasks
             return RestorableTypes.Contains(packageSpec.RestoreMetadata.ProjectStyle);
         }
 
-        public static string GetPropertyIfExists(ITaskItem item, string key)
+        public static string? GetPropertyIfExists(ITaskItem item, string key)
         {
             var wrapper = new MSBuildTaskItem(item);
 
@@ -130,7 +128,7 @@ namespace NuGet.Build.Tasks
             IReadOnlyList<IAssetsLogMessage> additionalMessages,
             Common.ILogger log,
             CancellationToken cancellationToken,
-            IRestoreProgressReporter progressReporter = null)
+            IRestoreProgressReporter? progressReporter = null)
         {
             if (dependencyGraphSpec == null)
             {
@@ -318,10 +316,10 @@ namespace NuGet.Build.Tasks
         /// <param name="log">An <see cref="NuGet.Common.ILogger"/> object used to log messages.</param>
         /// <returns>A <see cref="Tuple{ProjectStyle, Boolean}"/> containing the project style and a value indicating if the project is using a style that is compatible with PackageReference.
         /// If the value of <paramref name="restoreProjectStyle"/> is not empty and could not be parsed, <code>null</code> is returned.</returns>
-        public static (ProjectStyle ProjectStyle, string PackagesConfigFilePath) GetProjectRestoreStyle(ProjectStyle? restoreProjectStyle, bool hasPackageReferenceItems, string projectDirectory, string projectName, Common.ILogger log)
+        public static (ProjectStyle ProjectStyle, string? PackagesConfigFilePath) GetProjectRestoreStyle(ProjectStyle? restoreProjectStyle, bool hasPackageReferenceItems, string projectDirectory, string projectName, Common.ILogger log)
         {
             ProjectStyle projectStyle;
-            string packagesConfigFilePath = null;
+            string? packagesConfigFilePath = null;
 
             // Allow a user to override by setting RestoreProjectStyle in the project.
             if (restoreProjectStyle.HasValue)
@@ -358,7 +356,7 @@ namespace NuGet.Build.Tasks
         /// <param name="log">An <see cref="NuGet.Common.ILogger"/> object used to log messages.</param>
         /// <returns>A <see cref="Tuple{ProjectStyle, Boolean}"/> containing the project style and a value indicating if the project is using a style that is compatible with PackageReference.
         /// If the value of <paramref name="restoreProjectStyle"/> is not empty and could not be parsed, <code>null</code> is returned.</returns>
-        public static (ProjectStyle ProjectStyle, string PackagesConfigFilePath) GetProjectRestoreStyle(string restoreProjectStyle, bool hasPackageReferenceItems, string projectDirectory, string projectName, Common.ILogger log)
+        public static (ProjectStyle ProjectStyle, string? PackagesConfigFilePath) GetProjectRestoreStyle(string restoreProjectStyle, bool hasPackageReferenceItems, string projectDirectory, string projectName, Common.ILogger log)
         {
             return GetProjectRestoreStyle(GetProjectRestoreStyleFromProjectProperty(restoreProjectStyle), hasPackageReferenceItems, projectDirectory, projectName, log);
         }
@@ -370,7 +368,7 @@ namespace NuGet.Build.Tasks
         /// <param name="projectName">The name of the project file.</param>
         /// <param name="packagesConfigPath">Receives the full path to the packages.config file if one exists, otherwise <code>null</code>.</param>
         /// <returns><code>true</code> if a packages.config exists next to the project, otherwise <code>false</code>.</returns>
-        private static bool ProjectHasPackagesConfigFile(string projectDirectory, string projectName, out string packagesConfigPath)
+        private static bool ProjectHasPackagesConfigFile(string projectDirectory, string projectName, out string? packagesConfigPath)
         {
             if (string.IsNullOrWhiteSpace(projectDirectory))
             {
@@ -390,10 +388,10 @@ namespace NuGet.Build.Tasks
 #if IS_DESKTOP
         private static async Task<RestoreSummary> PerformNuGetV2RestoreAsync(Common.ILogger log, DependencyGraphSpec dgFile, bool noCache, bool disableParallel, bool interactive)
         {
-            string globalPackageFolder = null;
-            string repositoryPath = null;
-            IList<PackageSource> packageSources = null;
-            ISettings settings = null;
+            string? globalPackageFolder = null;
+            string? repositoryPath = null;
+            IList<PackageSource>? packageSources = null;
+            ISettings? settings = null;
 
             Dictionary<PackageReference, List<string>> packageReferenceToProjects = new(PackageReferenceComparer.Instance);
             Dictionary<string, RestoreAuditProperties> restoreAuditProperties = new(PathUtility.GetStringComparerBasedOnOS());
@@ -420,7 +418,7 @@ namespace NuGet.Build.Tasks
 
                 settings = settings ?? Settings.LoadSettingsGivenConfigPaths(pcRestoreMetadata.ConfigFilePaths);
 
-                string packagesConfigPath = GetPackagesConfigFilePath(pcRestoreMetadata.ProjectPath);
+                string? packagesConfigPath = GetPackagesConfigFilePath(pcRestoreMetadata.ProjectPath);
 
                 foreach (PackageReference packageReference in GetInstalledPackageReferences(packagesConfigPath))
                 {
@@ -434,16 +432,22 @@ namespace NuGet.Build.Tasks
                 restoreAuditProperties.Add(packageSpec.FilePath, packageSpec.RestoreMetadata.RestoreAuditProperties);
             }
 
-            if (string.IsNullOrEmpty(repositoryPath))
+            if (repositoryPath is null || string.IsNullOrEmpty(repositoryPath))
             {
                 throw new InvalidOperationException(Strings.RestoreNoSolutionFound);
             }
 
-            PackageSourceProvider packageSourceProvider = new PackageSourceProvider(settings);
-            var sourceRepositoryProvider = new CachingSourceProvider(packageSourceProvider);
-            var nuGetPackageManager = new NuGetPackageManager(sourceRepositoryProvider, settings, repositoryPath);
+            string resolvedRepositoryPath = repositoryPath;
+            IList<PackageSource> resolvedPackageSources = packageSources
+                ?? throw new InvalidOperationException("No package sources were configured for packages.config restore.");
+            ISettings resolvedSettings = settings
+                ?? throw new InvalidOperationException("No settings were configured for packages.config restore.");
 
-            var effectivePackageSaveMode = CalculateEffectivePackageSaveMode(settings);
+            PackageSourceProvider packageSourceProvider = new PackageSourceProvider(resolvedSettings);
+            var sourceRepositoryProvider = new CachingSourceProvider(packageSourceProvider);
+            var nuGetPackageManager = new NuGetPackageManager(sourceRepositoryProvider, resolvedSettings, resolvedRepositoryPath);
+
+            var effectivePackageSaveMode = CalculateEffectivePackageSaveMode(resolvedSettings);
 
             var packageSaveMode = effectivePackageSaveMode == Packaging.PackageSaveMode.None ?
                 Packaging.PackageSaveMode.Defaultv2 :
@@ -497,7 +501,7 @@ namespace NuGet.Build.Tasks
             // NOTE: This feature is currently not working at all. See https://github.com/NuGet/Home/issues/4327
             // CheckRequireConsent();
 
-            var clientPolicyContext = ClientPolicyContext.GetClientPolicy(settings, collectorLogger);
+            var clientPolicyContext = ClientPolicyContext.GetClientPolicy(resolvedSettings, collectorLogger);
             var projectContext = new ConsoleProjectContext(collectorLogger)
             {
                 PackageExtractionContext = new PackageExtractionContext(
@@ -516,9 +520,9 @@ namespace NuGet.Build.Tasks
             {
                 cacheContext.NoCache = noCache;
 
-                var packageSourceMapping = PackageSourceMapping.GetPackageSourceMapping(settings);
+                var packageSourceMapping = PackageSourceMapping.GetPackageSourceMapping(resolvedSettings);
 
-                var downloadContext = new PackageDownloadContext(cacheContext, repositoryPath, directDownload: false, packageSourceMapping)
+                var downloadContext = new PackageDownloadContext(cacheContext, resolvedRepositoryPath, directDownload: false, packageSourceMapping)
                 {
                     ClientPolicyContext = clientPolicyContext
                 };
@@ -533,8 +537,8 @@ namespace NuGet.Build.Tasks
                 return new RestoreSummary(
                     result.Restored,
                     "packages.config projects",
-                    settings.GetConfigFilePaths().ToArray(),
-                    packageSources.Select(x => x.Source).ToArray(),
+                    resolvedSettings.GetConfigFilePaths().ToArray(),
+                    resolvedPackageSources.Select(x => x.Source).ToArray(),
                     installCount,
                     collectorLogger.Errors.Concat(ProcessFailedEventsIntoRestoreLogs(failedEvents)).ToArray()
                 );
@@ -547,7 +551,7 @@ namespace NuGet.Build.Tasks
             PackageSaveMode effectivePackageSaveMode;
             if (string.IsNullOrEmpty(packageSaveModeValue))
             {
-                packageSaveModeValue = SettingsUtility.GetConfigValue(settings, "PackageSaveMode");
+                packageSaveModeValue = SettingsUtility.GetConfigValue(settings, "PackageSaveMode") ?? string.Empty;
             }
 
             if (!string.IsNullOrEmpty(packageSaveModeValue))
@@ -584,9 +588,9 @@ namespace NuGet.Build.Tasks
         }
 
 
-        private static IEnumerable<PackageReference> GetInstalledPackageReferences(string projectConfigFilePath)
+        private static IEnumerable<PackageReference> GetInstalledPackageReferences(string? projectConfigFilePath)
         {
-            if (File.Exists(projectConfigFilePath))
+            if (projectConfigFilePath is not null && File.Exists(projectConfigFilePath))
             {
                 try
                 {
@@ -684,17 +688,36 @@ namespace NuGet.Build.Tasks
             return AppendItems(projectDirectory, currentFallbackFolders, filteredAdditionalProjectFallbackFolders);
         }
 
-        private static string[] AppendItems(string projectDirectory, string[] current, IEnumerable<string> additional)
+        private static string[] AppendItems(string projectDirectory, string?[]? current, IEnumerable<string>? additional)
         {
-            if (additional == null || !additional.Any())
+            var currentItems = new List<string>();
+            if (current is not null)
             {
-                // noop
-                return current;
+                foreach (string? item in current)
+                {
+                    currentItems.Add(item
+                        ?? throw new InvalidOperationException("Restore source and fallback folder values cannot be null."));
+                }
             }
 
-            var additionalAbsolute = additional.Select(e => UriUtility.GetAbsolutePath(projectDirectory, e));
+            if (additional is null || !additional.Any())
+            {
+                // noop
+                return currentItems.ToArray();
+            }
 
-            return current.Concat(additionalAbsolute).ToArray();
+            foreach (string? item in additional)
+            {
+                if (item is null)
+                {
+                    throw new InvalidOperationException("Restore source and fallback folder values cannot be null.");
+                }
+
+                currentItems.Add(UriUtility.GetAbsolutePath(projectDirectory, item)
+                    ?? throw new InvalidOperationException("A restore source or fallback folder could not be resolved."));
+            }
+
+            return currentItems.ToArray();
         }
 
         /// <summary>
@@ -703,14 +726,18 @@ namespace NuGet.Build.Tasks
         /// <param name="projectFullPath">The full path to the project.</param>
         /// <returns>The path to the packages.config file if one exists, otherwise <see langword="null" />.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="projectFullPath" /> is <see langword="null" />.</exception>
-        public static string GetPackagesConfigFilePath(string projectFullPath)
+        public static string? GetPackagesConfigFilePath(string projectFullPath)
         {
             if (string.IsNullOrWhiteSpace(projectFullPath))
             {
                 throw new ArgumentException(Strings.Argument_Cannot_Be_Null_Or_Empty, nameof(projectFullPath));
             }
 
-            return GetPackagesConfigFilePath(Path.GetDirectoryName(projectFullPath), Path.GetFileNameWithoutExtension(projectFullPath));
+            string projectDirectory = Path.GetDirectoryName(projectFullPath)
+                ?? throw new ArgumentException(Strings.Argument_Cannot_Be_Null_Or_Empty, nameof(projectFullPath));
+            string projectName = Path.GetFileNameWithoutExtension(projectFullPath)
+                ?? throw new ArgumentException(Strings.Argument_Cannot_Be_Null_Or_Empty, nameof(projectFullPath));
+            return GetPackagesConfigFilePath(projectDirectory, projectName);
         }
 
         /// <summary>
@@ -720,7 +747,7 @@ namespace NuGet.Build.Tasks
         /// <param name="projectName">The name of the project file.</param>
         /// <returns>The path to the packages.config file if one exists, otherwise <see langword="null" />.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="projectDirectory" /> -or- <paramref name="projectName" /> is <see langword="null" />.</exception>
-        public static string GetPackagesConfigFilePath(string projectDirectory, string projectName)
+        public static string? GetPackagesConfigFilePath(string projectDirectory, string projectName)
         {
             if (string.IsNullOrWhiteSpace(projectDirectory))
             {
@@ -757,12 +784,12 @@ namespace NuGet.Build.Tasks
         /// </summary>
         /// <param name="value">The user supplied value indicating what files to embed in the binary log.</param>
         /// <returns>An integer representing what to embed in the binary log.</returns>
-        public static int GetFilesToEmbedInBinlogValue(string value)
+        public static int GetFilesToEmbedInBinlogValue(string? value)
         {
             return GetFilesToEmbedInBinlogValue(value, EnvironmentVariableWrapper.Instance);
         }
 
-        internal static int GetFilesToEmbedInBinlogValue(string value, IEnvironmentVariableReader environmentVariableReader)
+        internal static int GetFilesToEmbedInBinlogValue(string? value, IEnvironmentVariableReader environmentVariableReader)
         {
             if (!string.Equals(environmentVariableReader.GetEnvironmentVariable("MSBUILDBINARYLOGGERENABLED"), bool.TrueString, StringComparison.OrdinalIgnoreCase))
             {

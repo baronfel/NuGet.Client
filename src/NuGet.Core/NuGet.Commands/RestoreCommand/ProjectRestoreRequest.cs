@@ -13,7 +13,7 @@ namespace NuGet.Commands
         public ProjectRestoreRequest(
             RestoreRequest request,
             PackageSpec packageSpec,
-            LockFile existingLockFile,
+            LockFile? existingLockFile,
             RestoreCollectorLogger log)
         {
             CacheContext = request.CacheContext;
@@ -37,8 +37,8 @@ namespace NuGet.Commands
         public RestoreCollectorLogger Log { get; }
         public string PackagesDirectory { get; }
         public int MaxDegreeOfConcurrency { get; }
-        public IRestoreOperationProgressReporter OperationProgressReporter { get; }
-        public LockFile ExistingLockFile { get; }
+        public IRestoreOperationProgressReporter? OperationProgressReporter { get; }
+        public LockFile? ExistingLockFile { get; }
         public PackageSpec Project { get; }
         public PackageExtractionContext PackageExtractionContext { get; }
         public Guid ParentId { get; set; }

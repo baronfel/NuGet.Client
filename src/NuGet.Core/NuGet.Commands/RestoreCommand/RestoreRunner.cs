@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -25,6 +23,11 @@ namespace NuGet.Commands
         /// </summary>
         public static async Task<IReadOnlyList<RestoreSummary>> RunAsync(RestoreArgs restoreContext, CancellationToken token)
         {
+            if (restoreContext is null)
+            {
+                throw new ArgumentNullException(nameof(restoreContext));
+            }
+
             // Create requests
             var requests = await GetRequests(restoreContext);
 
@@ -37,6 +40,11 @@ namespace NuGet.Commands
         /// </summary>
         public static async Task<IReadOnlyList<RestoreSummary>> RunAsync(RestoreArgs restoreContext)
         {
+            if (restoreContext is null)
+            {
+                throw new ArgumentNullException(nameof(restoreContext));
+            }
+
             // Run requests
             return await RunAsync(restoreContext, CancellationToken.None);
         }
@@ -107,6 +115,16 @@ namespace NuGet.Commands
             IEnumerable<RestoreSummaryRequest> restoreRequests,
             RestoreArgs restoreContext)
         {
+            if (restoreRequests is null)
+            {
+                throw new ArgumentNullException(nameof(restoreRequests));
+            }
+
+            if (restoreContext is null)
+            {
+                throw new ArgumentNullException(nameof(restoreContext));
+            }
+
             return RunWithoutCommitAsync(restoreRequests, restoreContext, CancellationToken.None);
         }
 
@@ -118,6 +136,16 @@ namespace NuGet.Commands
             RestoreArgs restoreContext,
             CancellationToken cancellationToken)
         {
+            if (restoreRequests is null)
+            {
+                throw new ArgumentNullException(nameof(restoreRequests));
+            }
+
+            if (restoreContext is null)
+            {
+                throw new ArgumentNullException(nameof(restoreContext));
+            }
+
             var maxTasks = GetMaxTaskCount(restoreContext);
 
             var log = restoreContext.Log;
@@ -171,6 +199,11 @@ namespace NuGet.Commands
         /// </summary>
         public static async Task<IReadOnlyList<RestoreSummaryRequest>> GetRequests(RestoreArgs restoreContext)
         {
+            if (restoreContext is null)
+            {
+                throw new ArgumentNullException(nameof(restoreContext));
+            }
+
             // Get requests
             var requests = new List<RestoreSummaryRequest>();
 
@@ -214,7 +247,7 @@ namespace NuGet.Commands
                 foreach (var request in inputRequests)
                 {
                     // De-dupe requests
-                    if (uniqueRequest.Add(request.Request.LockFilePath))
+                    if (request.Request.LockFilePath is null || uniqueRequest.Add(request.Request.LockFilePath))
                     {
                         requests.Add(request);
                     }
@@ -243,22 +276,35 @@ namespace NuGet.Commands
 
         private static async Task<RestoreSummary> ExecuteAndCommitAsync(
             RestoreSummaryRequest summaryRequest,
-            IRestoreProgressReporter progressReporter,
-            IRestoreOperationProgressReporter operationProgress,
+            IRestoreProgressReporter? progressReporter,
+            IRestoreOperationProgressReporter? operationProgress,
             CancellationToken token)
         {
             operationProgress?.StartProject(summaryRequest.InputPath);
             summaryRequest.Request.OperationProgressReporter = operationProgress;
 
+            bool commitStarted = false;
+            bool commitSucceeded = false;
+            bool isNoOp = false;
+
             try
             {
                 RestoreResultPair result = await ExecuteAsync(summaryRequest, token);
+                isNoOp = result.Result is NoOpRestoreResult;
+                operationProgress?.StartProjectCommit(isNoOp);
+                commitStarted = true;
 
-                return await CommitAsync(result, progressReporter, token);
+                RestoreSummary summary = await CommitAsync(result, progressReporter, token);
+                commitSucceeded = true;
+                return summary;
             }
             finally
             {
-                operationProgress?.CompleteProject(summaryRequest.InputPath);
+                operationProgress?.CompleteProject(
+                    summaryRequest.InputPath,
+                    commitStarted,
+                    commitSucceeded,
+                    isNoOp);
             }
         }
 
@@ -284,7 +330,7 @@ namespace NuGet.Commands
 
         public static Task<RestoreSummary> CommitAsync(RestoreResultPair restoreResult, CancellationToken token) => CommitAsync(restoreResult, progressReporter: null, token);
 
-        private static async Task<RestoreSummary> CommitAsync(RestoreResultPair restoreResult, IRestoreProgressReporter progressReporter, CancellationToken token)
+        private static async Task<RestoreSummary> CommitAsync(RestoreResultPair restoreResult, IRestoreProgressReporter? progressReporter, CancellationToken token)
         {
             if (restoreResult == null)
             {
@@ -407,6 +453,11 @@ namespace NuGet.Commands
 
         public static string GetInvalidInputErrorMessage(string input)
         {
+            if (input is null)
+            {
+                throw new ArgumentNullException(nameof(input));
+            }
+
             Debug.Assert(File.Exists(input) || Directory.Exists(input));
             if (File.Exists(input))
             {

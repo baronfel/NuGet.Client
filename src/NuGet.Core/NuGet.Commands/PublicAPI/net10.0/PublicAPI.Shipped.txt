@@ -545,56 +545,56 @@ NuGet.Commands.RestoreCommandProvidersCache.GetOrCreate(string! globalPackagesPa
 NuGet.Commands.RestoreCommandProvidersCache.GetOrCreate(string! globalPackagesPath, System.Collections.Generic.IReadOnlyList<string!>! fallbackPackagesPaths, System.Collections.Generic.IReadOnlyList<NuGet.Protocol.Core.Types.SourceRepository!>! sources, NuGet.Protocol.Core.Types.SourceCacheContext! cacheContext, NuGet.Common.ILogger! log, bool updateLastAccess) -> NuGet.Commands.RestoreCommandProviders!
 NuGet.Commands.RestoreCommandProvidersCache.RestoreCommandProvidersCache() -> void
 NuGet.Commands.RestoreRequest
-~NuGet.Commands.RestoreRequest.AdditionalMessages.get -> System.Collections.Generic.IReadOnlyList<NuGet.ProjectModel.IAssetsLogMessage>
-~NuGet.Commands.RestoreRequest.AdditionalMessages.set -> void
+NuGet.Commands.RestoreRequest.AdditionalMessages.get -> System.Collections.Generic.IReadOnlyList<NuGet.ProjectModel.IAssetsLogMessage!>?
+NuGet.Commands.RestoreRequest.AdditionalMessages.set -> void
 NuGet.Commands.RestoreRequest.AllowNoOp.get -> bool
 NuGet.Commands.RestoreRequest.AllowNoOp.set -> void
-~NuGet.Commands.RestoreRequest.CacheContext.get -> NuGet.Protocol.Core.Types.SourceCacheContext
-~NuGet.Commands.RestoreRequest.CacheContext.set -> void
-~NuGet.Commands.RestoreRequest.ClientPolicyContext.get -> NuGet.Packaging.Signing.ClientPolicyContext
-~NuGet.Commands.RestoreRequest.CompatibilityProfiles.get -> System.Collections.Generic.ISet<NuGet.Frameworks.FrameworkRuntimePair>
-~NuGet.Commands.RestoreRequest.DependencyGraphSpec.get -> NuGet.ProjectModel.DependencyGraphSpec
-~NuGet.Commands.RestoreRequest.DependencyGraphSpec.set -> void
-~NuGet.Commands.RestoreRequest.DependencyProviders.get -> NuGet.Commands.RestoreCommandProviders
-~NuGet.Commands.RestoreRequest.DependencyProviders.set -> void
-~NuGet.Commands.RestoreRequest.EnvironmentVariableReader.get -> NuGet.Common.IEnvironmentVariableReader
-~NuGet.Commands.RestoreRequest.EnvironmentVariableReader.init -> void
-~NuGet.Commands.RestoreRequest.ExistingLockFile.get -> NuGet.ProjectModel.LockFile
-~NuGet.Commands.RestoreRequest.ExistingLockFile.set -> void
-~NuGet.Commands.RestoreRequest.ExternalProjects.get -> System.Collections.Generic.IList<NuGet.ProjectModel.ExternalProjectReference>
-~NuGet.Commands.RestoreRequest.ExternalProjects.set -> void
-~NuGet.Commands.RestoreRequest.FallbackRuntimes.get -> System.Collections.Generic.ISet<string>
+NuGet.Commands.RestoreRequest.CacheContext.get -> NuGet.Protocol.Core.Types.SourceCacheContext!
+NuGet.Commands.RestoreRequest.CacheContext.set -> void
+NuGet.Commands.RestoreRequest.ClientPolicyContext.get -> NuGet.Packaging.Signing.ClientPolicyContext!
+NuGet.Commands.RestoreRequest.CompatibilityProfiles.get -> System.Collections.Generic.ISet<NuGet.Frameworks.FrameworkRuntimePair!>!
+NuGet.Commands.RestoreRequest.DependencyGraphSpec.get -> NuGet.ProjectModel.DependencyGraphSpec?
+NuGet.Commands.RestoreRequest.DependencyGraphSpec.set -> void
+NuGet.Commands.RestoreRequest.DependencyProviders.get -> NuGet.Commands.RestoreCommandProviders!
+NuGet.Commands.RestoreRequest.DependencyProviders.set -> void
+NuGet.Commands.RestoreRequest.EnvironmentVariableReader.get -> NuGet.Common.IEnvironmentVariableReader!
+NuGet.Commands.RestoreRequest.EnvironmentVariableReader.init -> void
+NuGet.Commands.RestoreRequest.ExistingLockFile.get -> NuGet.ProjectModel.LockFile?
+NuGet.Commands.RestoreRequest.ExistingLockFile.set -> void
+NuGet.Commands.RestoreRequest.ExternalProjects.get -> System.Collections.Generic.IList<NuGet.ProjectModel.ExternalProjectReference!>!
+NuGet.Commands.RestoreRequest.ExternalProjects.set -> void
+NuGet.Commands.RestoreRequest.FallbackRuntimes.get -> System.Collections.Generic.ISet<string!>!
 NuGet.Commands.RestoreRequest.HideWarningsAndErrors.get -> bool
 NuGet.Commands.RestoreRequest.HideWarningsAndErrors.set -> void
 NuGet.Commands.RestoreRequest.IsLowercasePackagesDirectory.get -> bool
 NuGet.Commands.RestoreRequest.IsLowercasePackagesDirectory.set -> void
 NuGet.Commands.RestoreRequest.IsRestoreOriginalAction.get -> bool
 NuGet.Commands.RestoreRequest.IsRestoreOriginalAction.set -> void
-~NuGet.Commands.RestoreRequest.LockFilePath.get -> string
-~NuGet.Commands.RestoreRequest.LockFilePath.set -> void
+NuGet.Commands.RestoreRequest.LockFilePath.get -> string?
+NuGet.Commands.RestoreRequest.LockFilePath.set -> void
 NuGet.Commands.RestoreRequest.LockFileVersion.get -> int
 NuGet.Commands.RestoreRequest.LockFileVersion.set -> void
-~NuGet.Commands.RestoreRequest.Log.get -> NuGet.Common.ILogger
-~NuGet.Commands.RestoreRequest.Log.set -> void
-~NuGet.Commands.RestoreRequest.MSBuildProjectExtensionsPath.get -> string
-~NuGet.Commands.RestoreRequest.MSBuildProjectExtensionsPath.set -> void
+NuGet.Commands.RestoreRequest.Log.get -> NuGet.Common.ILogger!
+NuGet.Commands.RestoreRequest.Log.set -> void
+NuGet.Commands.RestoreRequest.MSBuildProjectExtensionsPath.get -> string?
+NuGet.Commands.RestoreRequest.MSBuildProjectExtensionsPath.set -> void
 NuGet.Commands.RestoreRequest.MaxDegreeOfConcurrency.get -> int
 NuGet.Commands.RestoreRequest.MaxDegreeOfConcurrency.set -> void
 NuGet.Commands.RestoreRequest.PackageSaveMode.get -> NuGet.Packaging.PackageSaveMode
 NuGet.Commands.RestoreRequest.PackageSaveMode.set -> void
-~NuGet.Commands.RestoreRequest.PackageSourceMapping.get -> NuGet.Configuration.PackageSourceMapping
-~NuGet.Commands.RestoreRequest.PackagesDirectory.get -> string
+NuGet.Commands.RestoreRequest.PackageSourceMapping.get -> NuGet.Configuration.PackageSourceMapping?
+NuGet.Commands.RestoreRequest.PackagesDirectory.get -> string!
 NuGet.Commands.RestoreRequest.ParentId.get -> System.Guid
 NuGet.Commands.RestoreRequest.ParentId.set -> void
-~NuGet.Commands.RestoreRequest.Project.get -> NuGet.ProjectModel.PackageSpec
+NuGet.Commands.RestoreRequest.Project.get -> NuGet.ProjectModel.PackageSpec!
 NuGet.Commands.RestoreRequest.ProjectStyle.get -> NuGet.ProjectModel.ProjectStyle
 NuGet.Commands.RestoreRequest.ProjectStyle.set -> void
-~NuGet.Commands.RestoreRequest.RequestedRuntimes.get -> System.Collections.Generic.ISet<string>
+NuGet.Commands.RestoreRequest.RequestedRuntimes.get -> System.Collections.Generic.ISet<string!>!
 NuGet.Commands.RestoreRequest.RestoreForceEvaluate.get -> bool
 NuGet.Commands.RestoreRequest.RestoreForceEvaluate.set -> void
-~NuGet.Commands.RestoreRequest.RestoreOutputPath.get -> string
-~NuGet.Commands.RestoreRequest.RestoreOutputPath.set -> void
-~NuGet.Commands.RestoreRequest.RestoreRequest(NuGet.ProjectModel.PackageSpec project, NuGet.Commands.RestoreCommandProviders dependencyProviders, NuGet.Protocol.Core.Types.SourceCacheContext cacheContext, NuGet.Packaging.Signing.ClientPolicyContext clientPolicyContext, NuGet.Configuration.PackageSourceMapping packageSourceMapping, NuGet.Common.ILogger log, NuGet.Commands.LockFileBuilderCache lockFileBuilderCache) -> void
+NuGet.Commands.RestoreRequest.RestoreOutputPath.get -> string?
+NuGet.Commands.RestoreRequest.RestoreOutputPath.set -> void
+NuGet.Commands.RestoreRequest.RestoreRequest(NuGet.ProjectModel.PackageSpec! project, NuGet.Commands.RestoreCommandProviders! dependencyProviders, NuGet.Protocol.Core.Types.SourceCacheContext! cacheContext, NuGet.Packaging.Signing.ClientPolicyContext! clientPolicyContext, NuGet.Configuration.PackageSourceMapping? packageSourceMapping, NuGet.Common.ILogger! log, NuGet.Commands.LockFileBuilderCache! lockFileBuilderCache) -> void
 NuGet.Commands.RestoreRequest.UpdatePackageLastAccessTime.get -> bool
 NuGet.Commands.RestoreRequest.UpdatePackageLastAccessTime.set -> void
 NuGet.Commands.RestoreRequest.ValidateRuntimeAssets.get -> bool
@@ -949,13 +949,13 @@ override NuGet.Commands.ResolvedDependencyKey.GetHashCode() -> int
 static NuGet.Commands.ResolvedDependencyKey.operator !=(NuGet.Commands.ResolvedDependencyKey left, NuGet.Commands.ResolvedDependencyKey right) -> bool
 static NuGet.Commands.ResolvedDependencyKey.operator ==(NuGet.Commands.ResolvedDependencyKey left, NuGet.Commands.ResolvedDependencyKey right) -> bool
 static NuGet.Commands.Restore.Utility.PackageSpecFactory.GetPackageSpec(NuGet.Commands.Restore.IProject! project, NuGet.Configuration.ISettings! settings) -> NuGet.ProjectModel.PackageSpec?
-~static NuGet.Commands.RestoreRunner.CommitAsync(NuGet.Commands.RestoreResultPair restoreResult, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<NuGet.Commands.RestoreSummary>
-~static NuGet.Commands.RestoreRunner.GetInvalidInputErrorMessage(string input) -> string
-~static NuGet.Commands.RestoreRunner.GetRequests(NuGet.Commands.RestoreArgs restoreContext) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<NuGet.Commands.RestoreSummaryRequest>>
-~static NuGet.Commands.RestoreRunner.RunAsync(NuGet.Commands.RestoreArgs restoreContext) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<NuGet.Commands.RestoreSummary>>
-~static NuGet.Commands.RestoreRunner.RunAsync(NuGet.Commands.RestoreArgs restoreContext, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<NuGet.Commands.RestoreSummary>>
-~static NuGet.Commands.RestoreRunner.RunWithoutCommit(System.Collections.Generic.IEnumerable<NuGet.Commands.RestoreSummaryRequest> restoreRequests, NuGet.Commands.RestoreArgs restoreContext) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<NuGet.Commands.RestoreResultPair>>
-~static NuGet.Commands.RestoreRunner.RunWithoutCommitAsync(System.Collections.Generic.IEnumerable<NuGet.Commands.RestoreSummaryRequest> restoreRequests, NuGet.Commands.RestoreArgs restoreContext, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<NuGet.Commands.RestoreResultPair>>
+static NuGet.Commands.RestoreRunner.CommitAsync(NuGet.Commands.RestoreResultPair! restoreResult, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<NuGet.Commands.RestoreSummary!>!
+static NuGet.Commands.RestoreRunner.GetInvalidInputErrorMessage(string! input) -> string!
+static NuGet.Commands.RestoreRunner.GetRequests(NuGet.Commands.RestoreArgs! restoreContext) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<NuGet.Commands.RestoreSummaryRequest!>!>!
+static NuGet.Commands.RestoreRunner.RunAsync(NuGet.Commands.RestoreArgs! restoreContext) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<NuGet.Commands.RestoreSummary!>!>!
+static NuGet.Commands.RestoreRunner.RunAsync(NuGet.Commands.RestoreArgs! restoreContext, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<NuGet.Commands.RestoreSummary!>!>!
+static NuGet.Commands.RestoreRunner.RunWithoutCommit(System.Collections.Generic.IEnumerable<NuGet.Commands.RestoreSummaryRequest!>! restoreRequests, NuGet.Commands.RestoreArgs! restoreContext) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<NuGet.Commands.RestoreResultPair!>!>!
+static NuGet.Commands.RestoreRunner.RunWithoutCommitAsync(System.Collections.Generic.IEnumerable<NuGet.Commands.RestoreSummaryRequest!>! restoreRequests, NuGet.Commands.RestoreArgs! restoreContext, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<NuGet.Commands.RestoreResultPair!>!>!
 ~static NuGet.Commands.RestoreSpecException.Create(string message, System.Collections.Generic.IEnumerable<string> files) -> NuGet.Commands.RestoreSpecException
 ~static NuGet.Commands.RestoreSpecException.Create(string message, System.Collections.Generic.IEnumerable<string> files, System.Exception innerException) -> NuGet.Commands.RestoreSpecException
 ~static NuGet.Commands.RestoreSummary.Log(NuGet.Common.ILogger logger, System.Collections.Generic.IReadOnlyList<NuGet.Commands.RestoreSummary> restoreSummaries, bool logErrors = false) -> void

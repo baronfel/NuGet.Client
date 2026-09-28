@@ -1448,7 +1448,9 @@ namespace NuGet.Commands
             string? runtimeGraphPath = projectTargetFramework?.RuntimeIdentifierGraphPath;
 
             // Load the runtime graph for the project if one is specified
-            RuntimeGraph? projectProviderRuntimeGraph = string.IsNullOrWhiteSpace(runtimeGraphPath) ? default : ProjectRestoreCommand.GetRuntimeGraph(runtimeGraphPath, _logger);
+            RuntimeGraph? projectProviderRuntimeGraph = runtimeGraphPath is null || string.IsNullOrWhiteSpace(runtimeGraphPath)
+                ? null
+                : ProjectRestoreCommand.GetRuntimeGraph(runtimeGraphPath, _logger);
 
             // Gets a merged runtime graph for the project and target framework
             runtimeGraph = ProjectRestoreCommand.GetRuntimeGraph(restoreTargetGraphForTargetFramework, localRepositories, projectRuntimeGraph: projectProviderRuntimeGraph, _logger);

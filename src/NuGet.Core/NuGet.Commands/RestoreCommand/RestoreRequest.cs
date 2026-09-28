@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -21,16 +19,16 @@ namespace NuGet.Commands
     {
         public static readonly int DefaultDegreeOfConcurrency = 16;
 
-        private string _lockFilePath;
+        private string? _lockFilePath;
 
-        private Lazy<LockFile> _lockFileLazy;
+        private Lazy<LockFile>? _lockFileLazy;
 
         public RestoreRequest(
             PackageSpec project,
             RestoreCommandProviders dependencyProviders,
             SourceCacheContext cacheContext,
             ClientPolicyContext clientPolicyContext,
-            PackageSourceMapping packageSourceMapping,
+            PackageSourceMapping? packageSourceMapping,
             ILogger log,
             LockFileBuilderCache lockFileBuilderCache)
         {
@@ -51,7 +49,7 @@ namespace NuGet.Commands
             RestoreOutputPath = Path.GetDirectoryName(Project.FilePath);
         }
 
-        public DependencyGraphSpec DependencyGraphSpec { get; set; }
+        public DependencyGraphSpec? DependencyGraphSpec { get; set; }
 
         public bool AllowNoOp { get; set; }
 
@@ -59,7 +57,7 @@ namespace NuGet.Commands
 
         internal LockFileBuilderCache LockFileBuilderCache { get; }
 
-        internal IRestoreOperationProgressReporter OperationProgressReporter { get; set; }
+        internal IRestoreOperationProgressReporter? OperationProgressReporter { get; set; }
 
         public ILogger Log { get; set; }
 
@@ -88,13 +86,21 @@ namespace NuGet.Commands
         /// The path to the lock file to read/write. If not specified, uses the file 'project.lock.json' in the same
         /// directory as the provided PackageSpec.
         /// </summary>
-        public string LockFilePath
+        public string? LockFilePath
         {
             get => _lockFilePath;
             set
             {
                 _lockFilePath = value;
-                _lockFileLazy = string.IsNullOrWhiteSpace(value) ? null : new Lazy<LockFile>(() => LockFileUtilities.GetLockFile(_lockFilePath, Log));
+                if (value is null || string.IsNullOrWhiteSpace(value))
+                {
+                    _lockFileLazy = null;
+                }
+                else
+                {
+                    string lockFilePath = value;
+                    _lockFileLazy = new Lazy<LockFile>(() => LockFileUtilities.GetLockFile(lockFilePath, Log));
+                }
             }
         }
 
@@ -103,12 +109,20 @@ namespace NuGet.Commands
         /// (or, if that property is not specified, from the default location of the lock file, as specified in the
         /// description for <see cref="LockFilePath"/>)
         /// </summary>
-        public LockFile ExistingLockFile
+        public LockFile? ExistingLockFile
         {
             get { return _lockFileLazy?.Value; }
             set
             {
-                _lockFileLazy = value == null ? null : new Lazy<LockFile>(() => value);
+                if (value is null)
+                {
+                    _lockFileLazy = null;
+                }
+                else
+                {
+                    LockFile lockFile = value;
+                    _lockFileLazy = new Lazy<LockFile>(() => lockFile);
+                }
             }
         }
 
@@ -158,12 +172,12 @@ namespace NuGet.Commands
         /// <summary>
         /// Restore output path
         /// </summary>
-        public string RestoreOutputPath { get; set; }
+        public string? RestoreOutputPath { get; set; }
 
         /// <summary>
         /// MSBuildProjectExtensionsPath
         /// </summary>
-        public string MSBuildProjectExtensionsPath { get; set; }
+        public string? MSBuildProjectExtensionsPath { get; set; }
 
         /// <summary>
         /// Compatibility options
@@ -184,17 +198,17 @@ namespace NuGet.Commands
 
         public ClientPolicyContext ClientPolicyContext { get; }
 
-        public PackageSourceMapping PackageSourceMapping { get; }
+        public PackageSourceMapping? PackageSourceMapping { get; }
 
         /// <summary>
         /// Gets the package ID patterns that are exempt from package source minimum publish age restrictions.
         /// </summary>
-        public MinPublishAgeExceptions MinPublishAgeExceptions { get; init; }
+        public MinPublishAgeExceptions? MinPublishAgeExceptions { get; init; }
 
         /// <remarks>
         /// This property should only be used to override the default verifier on tests.
         /// </remarks>
-        internal IPackageSignatureVerifier SignedPackageVerifier { get; set; }
+        internal IPackageSignatureVerifier? SignedPackageVerifier { get; set; }
 
         public Guid ParentId { get; set; }
 
@@ -202,7 +216,7 @@ namespace NuGet.Commands
 
         public bool RestoreForceEvaluate { get; set; }
 
-        public IReadOnlyList<IAssetsLogMessage> AdditionalMessages { get; set; }
+        public IReadOnlyList<IAssetsLogMessage>? AdditionalMessages { get; set; }
 
         /// <summary>
         /// This property is used to enable updating the package metadata timestamp

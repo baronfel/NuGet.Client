@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -77,7 +75,8 @@ namespace NuGet.Commands.Test
                 var progress = new Mock<IRestoreOperationProgressReporter>(MockBehavior.Strict);
                 progress.Setup(p => p.Start(1));
                 progress.Setup(p => p.StartProject(spec1.RestoreMetadata.ProjectPath));
-                progress.Setup(p => p.CompleteProject(spec1.RestoreMetadata.ProjectPath));
+                progress.Setup(p => p.StartProjectCommit(false));
+                progress.Setup(p => p.CompleteProject(spec1.RestoreMetadata.ProjectPath, true, true, false));
                 progress.Setup(p => p.StartProjectUpdate(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>()));
                 progress.Setup(p => p.EndProjectUpdate(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>()));
 
@@ -864,7 +863,10 @@ namespace NuGet.Commands.Test
                     Assert.True(Directory.Exists(Path.Combine(globalPackagesFolder.FullName, "y", "1.0.0"))); // Y is installed
                     Assert.True(File.Exists(targetsPath));
                     Assert.True(File.Exists(propsPath));
-                    progress.Verify(p => p.ReportPackageDownload("y", "1.0.0"), Times.Once);
+                    progress.Verify(p => p.StartPackageInstallBatch(2), Times.Once);
+                    progress.Verify(p => p.ReportPackageInstall("y", "1.0.0"), Times.Once);
+                    progress.Verify(p => p.CompletePackageInstall(), Times.Exactly(2));
+                    progress.Verify(p => p.EndPackageInstallBatch(), Times.Once);
                 }
             }
         }
@@ -2000,11 +2002,13 @@ namespace NuGet.Commands.Test
                     Assert.Equal(2, lockFile.Targets.First().Libraries.Count);
                     Assert.Equal(1, lockFile.CentralTransitiveDependencyGroups.Count);
 
-                    var centralTransitiveDep = lockFile.CentralTransitiveDependencyGroups.First().TransitiveDependencies.FirstOrDefault();
+                    var centralTransitiveDep = lockFile.CentralTransitiveDependencyGroups.First().TransitiveDependencies.First();
                     Assert.Equal(1, lockFile.CentralTransitiveDependencyGroups.First().TransitiveDependencies.Count());
                     Assert.True(centralTransitiveDep.VersionCentrallyManaged);
                     Assert.Equal("packageB", centralTransitiveDep.Name);
-                    Assert.Equal("[2.0.0, )", centralTransitiveDep.LibraryRange.VersionRange.ToNormalizedString());
+                    var centralTransitiveVersionRange = centralTransitiveDep.LibraryRange.VersionRange
+                        ?? throw new InvalidOperationException("Expected a central transitive dependency version range.");
+                    Assert.Equal("[2.0.0, )", centralTransitiveVersionRange.ToNormalizedString());
                     Assert.Equal(LibraryDependencyReferenceType.Transitive, centralTransitiveDep.ReferenceType);
                     Assert.Equal(0, lockFile.LogMessages.Count);
                 }

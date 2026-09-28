@@ -162,6 +162,46 @@
         <target state="new">Downloading {0} {1}</target>
         <note>0 - package ID, 1 - package version</note>
       </trans-unit>
+      <trans-unit id="RestoreProgressInstallingPackage">
+        <source>Installing {0} {1}</source>
+        <target state="new">Installing {0} {1}</target>
+        <note>0 - package ID, 1 - package version</note>
+      </trans-unit>
+      <trans-unit id="RestoreProgressPackagesStatus">
+        <source>Installing packages {0}/{1}</source>
+        <target state="new">Installing packages {0}/{1}</target>
+        <note>0 - completed package candidates, 1 - discovered package candidates</note>
+      </trans-unit>
+      <trans-unit id="RestoreProgressPackagesTitle">
+        <source>Installing packages</source>
+        <target state="new">Installing packages</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RestoreProgressPhaseCommitting">
+        <source>Committing {0}</source>
+        <target state="new">Committing {0}</target>
+        <note>0 - active project count</note>
+      </trans-unit>
+      <trans-unit id="RestoreProgressPhaseInstalling">
+        <source>Installing {0}</source>
+        <target state="new">Installing {0}</target>
+        <note>0 - active project count</note>
+      </trans-unit>
+      <trans-unit id="RestoreProgressPhaseResolving">
+        <source>Resolving {0}</source>
+        <target state="new">Resolving {0}</target>
+        <note>0 - active project count</note>
+      </trans-unit>
+      <trans-unit id="RestoreProgressPhaseUpToDate">
+        <source>Up to date {0}</source>
+        <target state="new">Up to date {0}</target>
+        <note>0 - project count</note>
+      </trans-unit>
+      <trans-unit id="RestoreProgressPreparing">
+        <source>Reading project specifications</source>
+        <target state="new">Reading project specifications</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RestoreProgressResolving">
         <source>Resolving dependencies</source>
         <target state="new">Resolving dependencies</target>
@@ -180,6 +220,11 @@
       <trans-unit id="RestoreProgressTitle">
         <source>Restoring projects</source>
         <target state="new">Restoring projects</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RestoreProgressWaitingForDependencies">
+        <source>Waiting for dependency resolution</source>
+        <target state="new">Waiting for dependency resolution</target>
         <note />
       </trans-unit>
       <trans-unit id="UnsupportedFallbackFramework">

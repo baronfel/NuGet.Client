@@ -150,6 +150,39 @@
     <value>Downloading {0} {1}</value>
     <comment>0 - package ID, 1 - package version</comment>
   </data>
+  <data name="RestoreProgressPreparing" xml:space="preserve">
+    <value>Reading project specifications</value>
+  </data>
+  <data name="RestoreProgressPhaseResolving" xml:space="preserve">
+    <value>Resolving {0}</value>
+    <comment>0 - active project count</comment>
+  </data>
+  <data name="RestoreProgressPhaseInstalling" xml:space="preserve">
+    <value>Installing {0}</value>
+    <comment>0 - active project count</comment>
+  </data>
+  <data name="RestoreProgressPhaseCommitting" xml:space="preserve">
+    <value>Committing {0}</value>
+    <comment>0 - active project count</comment>
+  </data>
+  <data name="RestoreProgressPhaseUpToDate" xml:space="preserve">
+    <value>Up to date {0}</value>
+    <comment>0 - project count</comment>
+  </data>
+  <data name="RestoreProgressPackagesTitle" xml:space="preserve">
+    <value>Installing packages</value>
+  </data>
+  <data name="RestoreProgressInstallingPackage" xml:space="preserve">
+    <value>Installing {0} {1}</value>
+    <comment>0 - package ID, 1 - package version</comment>
+  </data>
+  <data name="RestoreProgressPackagesStatus" xml:space="preserve">
+    <value>Installing packages {0}/{1}</value>
+    <comment>0 - completed package candidates, 1 - discovered package candidates</comment>
+  </data>
+  <data name="RestoreProgressWaitingForDependencies" xml:space="preserve">
+    <value>Waiting for dependency resolution</value>
+  </data>
   <data name="RestoreProgressTitle" xml:space="preserve">
     <value>Restoring projects</value>
   </data>

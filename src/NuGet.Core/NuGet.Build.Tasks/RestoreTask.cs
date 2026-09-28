@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -33,7 +31,7 @@ namespace NuGet.Build.Tasks
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
         private readonly IEnvironmentVariableReader _environmentVariableReader;
         private bool _disposed = false;
-        private MSBuildRestoreProgressReporter _progressReporter;
+        private MSBuildRestoreProgressReporter? _progressReporter;
 
         public RestoreTask()
             : this(EnvironmentVariableWrapper.Instance)
@@ -48,7 +46,7 @@ namespace NuGet.Build.Tasks
         /// DG file entries
         /// </summary>
         [Required]
-        public ITaskItem[] RestoreGraphItems { get; set; }
+        public ITaskItem[] RestoreGraphItems { get; set; } = Array.Empty<ITaskItem>();
 
         /// <summary>
         /// Disable parallel project restores and downloads
@@ -106,7 +104,7 @@ namespace NuGet.Build.Tasks
         /// Gets or sets the paths for files to embed in the binary log.
         /// </summary>
         [Output]
-        public ITaskItem[] EmbedInBinlog { get; set; }
+        public ITaskItem[] EmbedInBinlog { get; set; } = Array.Empty<ITaskItem>();
 
         /// <summary>
         /// Gets or sets the number of projects that were considered for this restore operation.
@@ -138,12 +136,13 @@ namespace NuGet.Build.Tasks
         /// 1 = Assets file, g.props, and g.targets
         /// 2 = dgspec, assets file, g.props, and g.targets
         /// </summary>
-        public string EmbedFilesInBinlog { get; set; }
+        public string? EmbedFilesInBinlog { get; set; }
 
         public override bool Execute()
         {
             var debugRestoreTask = _environmentVariableReader.GetEnvironmentVariable("DEBUG_RESTORE_TASK");
-            if (!string.IsNullOrEmpty(debugRestoreTask) &&
+            if (debugRestoreTask is not null &&
+                !string.IsNullOrEmpty(debugRestoreTask) &&
                 (debugRestoreTask.Equals(bool.TrueString, StringComparison.OrdinalIgnoreCase) || debugRestoreTask == "1"))
             {
                 Debugger.Launch();
@@ -239,13 +238,14 @@ namespace NuGet.Build.Tasks
                 return true;
             }
 
+            _progressReporter = new MSBuildRestoreProgressReporter(BuildEngine);
+
             // Convert to the internal wrapper
             var wrappedItems = RestoreGraphItems.Select(MSBuildUtility.WrapMSBuildItem);
 
             (var dgFile, var additionalMessages) = MSBuildRestoreUtility.GetDependencySpec(wrappedItems, readOnly: true, collectAdditionalMessages: true);
 
             EmbedInBinlog = GetFilesToEmbedInBinlog(dgFile);
-            _progressReporter = new MSBuildRestoreProgressReporter(BuildEngine);
 
             if (RestoreNoCache)
             {
@@ -349,7 +349,7 @@ namespace NuGet.Build.Tasks
                 }
                 else if (project.RestoreMetadata.ProjectStyle == ProjectStyle.PackagesConfig)
                 {
-                    string packagesConfigPath = BuildTasksUtility.GetPackagesConfigFilePath(project.RestoreMetadata.ProjectPath);
+                    string? packagesConfigPath = BuildTasksUtility.GetPackagesConfigFilePath(project.RestoreMetadata.ProjectPath);
 
                     if (packagesConfigPath != null)
                     {
