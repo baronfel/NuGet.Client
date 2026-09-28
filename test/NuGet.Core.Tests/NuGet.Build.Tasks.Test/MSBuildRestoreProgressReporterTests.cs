@@ -16,7 +16,7 @@ namespace NuGet.Build.Tasks.Test
         private const string RestoreTitle = "Restoring projects";
 
         [Fact]
-        public void CompletePackageInstall_WithoutMatchingStart_StopsPackageProgressAndRestoreProgressContinues()
+        public void CompletePackageInstall_WithoutMatchingStart_LogsAndRestoreContinues()
         {
             var engine = new ProgressBuildEngine();
             var log = new TestLogger();
@@ -28,11 +28,14 @@ namespace NuGet.Build.Tasks.Test
                 reporter.StartPackageInstallBatch(1);
                 Assert.True(reporter.TryStartPackageInstall("a", "1.0.0"));
 
-                // The mismatch is a progress bookkeeping bug. It must not throw into restore.
+                // "b" was never started. This is a NuGet-side bookkeeping bug, not an engine failure:
+                // it must be logged and skipped, and it must not stop or fail the rest of the operation.
                 reporter.CompletePackageInstall("b", "1.0.0");
 
-                Assert.False(reporter.TryStartPackageInstall("c", "1.0.0"));
+                // "c" is a genuinely new package identity, so it is still accepted normally.
+                Assert.True(reporter.TryStartPackageInstall("c", "1.0.0"));
                 reporter.CompletePackageInstall("a", "1.0.0");
+                reporter.CompletePackageInstall("c", "1.0.0");
                 reporter.EndPackageInstallBatch();
                 reporter.StartProjectCommit(isNoOp: false);
                 reporter.CompleteProject("project1.csproj", commitStarted: true, commitSucceeded: true, isNoOp: false);
@@ -40,8 +43,9 @@ namespace NuGet.Build.Tasks.Test
             }
 
             RecordingProgressReporter packages = engine.Reporters.Single(r => r.Title == PackagesTitle);
-            Assert.Equal("Abandoned", packages.Outcome);
-            Assert.All(packages.Updates, update => Assert.Equal(1, update.Total));
+            Assert.Equal("Completed", packages.Outcome);
+            Assert.Equal(2, packages.Updates.Last().Total);
+            Assert.Equal(2, packages.Updates.Last().Completed);
 
             RecordingProgressReporter restore = engine.Reporters.Single(r => r.Title == RestoreTitle);
             Assert.Equal("Completed", restore.Outcome);
@@ -51,66 +55,53 @@ namespace NuGet.Build.Tasks.Test
         }
 
         [Fact]
-        public void Report_WhenEngineReporterThrows_StopsThatOperationAndDoesNotThrow()
+        public void StatusProvider_SurfacesPhaseCountsOnlyWhenPolled()
         {
-            var engine = new ProgressBuildEngine(throwOnReportTitle: PackagesTitle);
-            var log = new TestLogger();
-
-            using (var reporter = new MSBuildRestoreProgressReporter(engine, log))
-            {
-                reporter.Start(1);
-                reporter.StartPackageInstallBatch(1);
-                reporter.TryStartPackageInstall("a", "1.0.0");
-                reporter.CompletePackageInstall("a", "1.0.0");
-                reporter.EndPackageInstallBatch();
-                reporter.StartProjectCommit(isNoOp: false);
-                reporter.CompleteProject("project1.csproj", commitStarted: true, commitSucceeded: true, isNoOp: false);
-                reporter.Complete();
-            }
-
-            Assert.Equal("Abandoned", engine.Reporters.Single(r => r.Title == PackagesTitle).Outcome);
-            Assert.Equal("Completed", engine.Reporters.Single(r => r.Title == RestoreTitle).Outcome);
-            Assert.Contains(log.Messages, message => message.Contains("Simulated progress failure."));
-        }
-
-        [Fact]
-        public void Report_WhenContentDoesNotChange_SkipsUpdateAndReportsEveryChange()
-        {
+            // ITaskProgressReporter is guaranteed never to throw, and a background timer -- not our
+            // code -- polls the status provider. This test documents the resulting behavior difference:
+            // counter changes made through Increment/AddToTotal/SetTotal are visible immediately, but a
+            // phase transition that only changes the text the provider computes is not forwarded until
+            // the engine's timer (simulated here via PollStatusProvider) next ticks.
             var engine = new ProgressBuildEngine();
 
             using (var reporter = new MSBuildRestoreProgressReporter(engine))
             {
+                RecordingProgressReporter restore = engine.Reporters.Single(r => r.Title == RestoreTitle);
+
+                // Setting the status provider polls it immediately, before any project has started.
+                Assert.Single(restore.Updates);
+                Assert.Null(restore.Updates[0].Total);
+
+                // Start touches Total directly, so it is visible without an explicit poll.
                 reporter.Start(2);
+                Assert.Equal(2, restore.Updates.Last().Total);
+
                 reporter.StartProject("project1.csproj");
                 reporter.StartProject("project2.csproj");
+
+                int countBeforeCommit = restore.Updates.Count;
                 reporter.StartProjectCommit(isNoOp: false);
+                Assert.Equal(countBeforeCommit, restore.Updates.Count);
+
+                restore.PollStatusProvider();
+                Assert.True(restore.Updates.Count > countBeforeCommit);
+                Assert.Contains("Committing", restore.Updates.Last().Status, StringComparison.Ordinal);
+
+                // Polling again with nothing changed must not add a duplicate frame.
+                int countAfterPoll = restore.Updates.Count;
+                restore.PollStatusProvider();
+                Assert.Equal(countAfterPoll, restore.Updates.Count);
+
                 reporter.CompleteProject("project1.csproj", commitStarted: true, commitSucceeded: true, isNoOp: false);
+                Assert.Equal(1, restore.Updates.Last().Completed);
 
-                RecordingProgressReporter restore = engine.Reporters.Single(r => r.Title == RestoreTitle);
-                IReadOnlyList<TaskProgressUpdate> updates = restore.Updates;
-
-                // Initial status, Start, commit, and completion each change content; StartProject does not.
-                Assert.Equal(4, updates.Count);
-                Assert.Equal(1, updates.Last().Completed);
-                Assert.Equal(2, updates.Last().Total);
-                for (int i = 1; i < updates.Count; i++)
-                {
-                    Assert.False(
-                        updates[i].Completed == updates[i - 1].Completed &&
-                        updates[i].Total == updates[i - 1].Total &&
-                        updates[i].Status == updates[i - 1].Status);
-                }
+                reporter.Complete();
             }
         }
 
         private sealed class ProgressBuildEngine : TestBuildEngine, IBuildEngine10
         {
-            private readonly RecordingEngineServices _engineServices;
-
-            public ProgressBuildEngine(string? throwOnReportTitle = null)
-            {
-                _engineServices = new RecordingEngineServices(throwOnReportTitle);
-            }
+            private readonly RecordingEngineServices _engineServices = new();
 
             public IReadOnlyList<RecordingProgressReporter> Reporters => _engineServices.Reporters;
 
@@ -129,13 +120,7 @@ namespace NuGet.Build.Tasks.Test
 
         private sealed class RecordingEngineServices : EngineServices
         {
-            private readonly string? _throwOnReportTitle;
             private readonly List<RecordingProgressReporter> _reporters = new();
-
-            public RecordingEngineServices(string? throwOnReportTitle)
-            {
-                _throwOnReportTitle = throwOnReportTitle;
-            }
 
             public IReadOnlyList<RecordingProgressReporter> Reporters
             {
@@ -150,7 +135,7 @@ namespace NuGet.Build.Tasks.Test
 
             public override ITaskProgressReporter CreateTaskProgressReporter(string title, TaskProgressUnit unit = TaskProgressUnit.Unspecified)
             {
-                var reporter = new RecordingProgressReporter(title, throwOnReport: title == _throwOnReportTitle);
+                var reporter = new RecordingProgressReporter(title);
                 lock (_reporters)
                 {
                     _reporters.Add(reporter);
@@ -160,15 +145,25 @@ namespace NuGet.Build.Tasks.Test
             }
         }
 
+        /// <summary>
+        /// A test double for <see cref="ITaskProgressReporter"/> that follows the real engine's contract:
+        /// members never throw, the first terminal call wins, and identical consecutive updates are not
+        /// recorded twice. Status-provider polling is not driven by a background timer here; tests call
+        /// <see cref="PollStatusProvider"/> to simulate a timer tick.
+        /// </summary>
         private sealed class RecordingProgressReporter : ITaskProgressReporter
         {
-            private readonly bool _throwOnReport;
+            private readonly object _gate = new();
             private readonly List<TaskProgressUpdate> _updates = new();
+            private long _completed;
+            private long? _total;
+            private string? _explicitStatus;
+            private Func<string?>? _statusProvider;
+            private bool _terminal;
 
-            public RecordingProgressReporter(string title, bool throwOnReport)
+            public RecordingProgressReporter(string title)
             {
                 Title = title;
-                _throwOnReport = throwOnReport;
             }
 
             public string Title { get; }
@@ -179,7 +174,7 @@ namespace NuGet.Build.Tasks.Test
             {
                 get
                 {
-                    lock (_updates)
+                    lock (_gate)
                     {
                         return _updates.ToList();
                     }
@@ -188,24 +183,154 @@ namespace NuGet.Build.Tasks.Test
 
             public void Report(TaskProgressUpdate value)
             {
-                if (_throwOnReport)
+                lock (_gate)
                 {
-                    throw new InvalidOperationException("Simulated progress failure.");
-                }
+                    if (_terminal)
+                    {
+                        return;
+                    }
 
-                lock (_updates)
-                {
-                    _updates.Add(value);
+                    _completed = Math.Max(0, value.Completed);
+                    _total = value.Total.HasValue ? Math.Max(0, value.Total.Value) : null;
+                    _explicitStatus = value.Status;
+                    _statusProvider = null;
+                    RecordIfChanged();
                 }
             }
 
-            public void Complete(string? summary = null) => Outcome ??= "Completed";
+            public void Increment(long delta = 1)
+            {
+                lock (_gate)
+                {
+                    if (_terminal)
+                    {
+                        return;
+                    }
 
-            public void Cancel(string? summary = null) => Outcome ??= "Canceled";
+                    _completed = Math.Max(0, _completed + delta);
+                    RecordIfChanged();
+                }
+            }
 
-            public void Fail(string? summary = null) => Outcome ??= "Failed";
+            public void AddToTotal(long delta)
+            {
+                lock (_gate)
+                {
+                    if (_terminal)
+                    {
+                        return;
+                    }
 
-            public void Dispose() => Outcome ??= "Abandoned";
+                    _total = Math.Max(0, (_total ?? 0) + delta);
+                    RecordIfChanged();
+                }
+            }
+
+            public void SetTotal(long? total)
+            {
+                lock (_gate)
+                {
+                    if (_terminal)
+                    {
+                        return;
+                    }
+
+                    _total = total.HasValue ? Math.Max(0, total.Value) : null;
+                    RecordIfChanged();
+                }
+            }
+
+            public void SetStatus(string? status)
+            {
+                lock (_gate)
+                {
+                    if (_terminal)
+                    {
+                        return;
+                    }
+
+                    _explicitStatus = status;
+                    _statusProvider = null;
+                    RecordIfChanged();
+                }
+            }
+
+            public void SetStatusProvider(Func<string?>? provider)
+            {
+                lock (_gate)
+                {
+                    if (_terminal)
+                    {
+                        return;
+                    }
+
+                    _statusProvider = provider;
+                    RecordIfChanged();
+                }
+            }
+
+            /// <summary>Simulates one tick of the engine's status-provider polling timer.</summary>
+            public void PollStatusProvider()
+            {
+                lock (_gate)
+                {
+                    if (_terminal || _statusProvider is null)
+                    {
+                        return;
+                    }
+
+                    RecordIfChanged();
+                }
+            }
+
+            public void Complete(string? summary = null) => Finish("Completed");
+
+            public void Cancel(string? summary = null) => Finish("Canceled");
+
+            public void Fail(string? summary = null) => Finish("Failed");
+
+            public void Dispose() => Finish("Abandoned");
+
+            private void Finish(string outcome)
+            {
+                lock (_gate)
+                {
+                    if (_terminal)
+                    {
+                        return;
+                    }
+
+                    _terminal = true;
+                    Outcome = outcome;
+                }
+            }
+
+            private void RecordIfChanged()
+            {
+                string? status = _statusProvider is not null ? SafeInvoke(_statusProvider) : _explicitStatus;
+                var update = new TaskProgressUpdate(_completed, _total, status);
+                if (_updates.Count == 0 || !IsSame(_updates[_updates.Count - 1], update))
+                {
+                    _updates.Add(update);
+                }
+            }
+
+            private static string? SafeInvoke(Func<string?> provider)
+            {
+                try
+                {
+                    return provider();
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            private static bool IsSame(TaskProgressUpdate x, TaskProgressUpdate y)
+            {
+                return x.Completed == y.Completed && x.Total == y.Total && x.Status == y.Status;
+            }
         }
     }
 }

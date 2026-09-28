@@ -155,28 +155,19 @@ namespace NuGet.Build.Tasks
             try
             {
                 bool success = ExecuteAsync(log).Result;
-
-                if (success)
-                {
-                    _progressReporter?.Complete();
-                }
-                else
-                {
-                    _progressReporter?.Fail();
-                }
-
+                _progressReporter?.Finish(success, _cts.Token);
                 return success;
             }
             catch (AggregateException ex) when (_cts.Token.IsCancellationRequested && ex.InnerException is OperationCanceledException)
             {
                 // Canceled by user
-                _progressReporter?.Cancel();
+                _progressReporter?.Finish(succeeded: false, _cts.Token);
                 log.LogError(Strings.RestoreCanceled);
                 return false;
             }
             catch (Exception e)
             {
-                _progressReporter?.Fail();
+                _progressReporter?.Finish(succeeded: false, _cts.Token);
                 ExceptionUtilities.LogException(e, log);
                 return false;
             }

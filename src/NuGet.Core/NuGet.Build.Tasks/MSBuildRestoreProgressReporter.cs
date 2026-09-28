@@ -2,10 +2,9 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Threading;
@@ -14,19 +13,25 @@ using NuGet.Commands;
 
 namespace NuGet.Build.Tasks
 {
-    [SuppressMessage(
-        "Design",
-        "CA1031:DoNotCatchGeneralExceptionTypes",
-        Justification = "Progress reporting must never fail a restore. Failures stop the affected progress operation and are logged.")]
+    /// <summary>
+    /// Reports restore progress through MSBuild's task progress reporting protocol.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ITaskProgressReporter"/> members never throw and are safe to call concurrently, so this
+    /// class does not guard its own calls into the engine. It still keeps its own thread-safe bookkeeping
+    /// for restore-specific state the engine does not know about: which phase each project is in, and
+    /// which unique packages are in flight. A bug in that bookkeeping (for example, a start/complete
+    /// mismatch, or a formatting failure) can still throw; <see cref="FailSafeRestoreOperationProgressReporter"/>
+    /// is the safety net for that, so restore never fails because of a progress-reporting bug.
+    /// </remarks>
     internal sealed class MSBuildRestoreProgressReporter : IRestoreOperationProgressReporter, IDisposable
     {
-        private readonly object _overallLock = new();
-        private readonly object _packageLock = new();
         private readonly IBuildEngine10? _buildEngine;
         private readonly Common.ILogger? _log;
+        private readonly ITaskProgressReporter? _overallReporter;
+        private readonly object _packageReporterGate = new();
         private readonly ConcurrentDictionary<PackageProgressIdentity, PackageProgressState> _packageProgress = new();
         private readonly ConcurrentDictionary<PackageProgressIdentity, InFlightPackage> _inFlightPackages = new();
-        private ITaskProgressReporter? _overallReporter;
         private ITaskProgressReporter? _packageReporter;
         private int _completedProjects;
         private int _totalProjects;
@@ -35,17 +40,11 @@ namespace NuGet.Build.Tasks
         private int _projectsCommitting;
         private int _projectsUpToDate;
         private int _projectsRemainingResolution;
+
+        // Gate-only counters: they decide when the package operation can finish. The visible
+        // Completed/Total shown on screen live in the engine's reporter, not here.
         private long _packagesTotal;
         private long _packagesCompleted;
-        private int _lastReportedProjectsCompleted;
-        private int _lastReportedProjectsTotal;
-        private string? _lastReportedOverallStatus;
-        private long _lastReportedPackagesCompleted;
-        private long _lastReportedPackagesTotal;
-        private string? _lastReportedPackageStatus;
-        private bool _packageOperationFinished;
-        private bool _overallOutcomeSet;
-        private string _packageStatus = string.Empty;
         private string? _lastCompletedProject;
 
         internal MSBuildRestoreProgressReporter(IBuildEngine? buildEngine, Common.ILogger? log = null)
@@ -53,24 +52,10 @@ namespace NuGet.Build.Tasks
             _buildEngine = buildEngine as IBuildEngine10;
             _log = log;
 
-            try
-            {
-                _overallReporter = _buildEngine?.EngineServices.CreateTaskProgressReporter(
-                    GetResourceString("RestoreProgressTitle"),
-                    TaskProgressUnit.Items);
-                if (_overallReporter is null)
-                {
-                    return;
-                }
-
-                string status = GetResourceString("RestoreProgressPreparing");
-                _overallReporter.Report(new TaskProgressUpdate(0, null, status));
-                _lastReportedOverallStatus = status;
-            }
-            catch (Exception exception)
-            {
-                StopOverallOperation(exception.ToString());
-            }
+            _overallReporter = _buildEngine?.EngineServices.CreateTaskProgressReporter(
+                GetResourceString("RestoreProgressTitle"),
+                TaskProgressUnit.Items);
+            _overallReporter?.SetStatusProvider(GetOverallStatus);
         }
 
         public void Start(int totalProjects)
@@ -78,12 +63,12 @@ namespace NuGet.Build.Tasks
             Interlocked.Exchange(ref _totalProjects, totalProjects);
             Interlocked.Exchange(ref _projectsResolving, totalProjects);
             Interlocked.Exchange(ref _projectsRemainingResolution, totalProjects);
-            ReportOverallProgress();
+            _overallReporter?.SetTotal(totalProjects > 0 ? totalProjects : null);
         }
 
         public void StartProject(string projectPath)
         {
-            ReportOverallProgress();
+            // No counter changes here; the status provider already reflects the current phase mix.
         }
 
         public void StartPackageInstallBatch(int packageCount)
@@ -95,13 +80,11 @@ namespace NuGet.Build.Tasks
 
             Interlocked.Decrement(ref _projectsResolving);
             Interlocked.Increment(ref _projectsInstalling);
-            ReportOverallProgress();
-            ReportPackageProgress();
         }
 
         public bool TryStartPackageInstall(string packageId, string packageVersion)
         {
-            if (_buildEngine is null || Volatile.Read(ref _packageOperationFinished))
+            if (_buildEngine is null)
             {
                 return false;
             }
@@ -113,33 +96,8 @@ namespace NuGet.Build.Tasks
             }
 
             _inFlightPackages.TryAdd(identity, new InFlightPackage(packageId, packageVersion, Stopwatch.GetTimestamp()));
-
             Interlocked.Increment(ref _packagesTotal);
-            lock (_packageLock)
-            {
-                if (_packageOperationFinished)
-                {
-                    LogReportingStopped(
-                        "RestoreProgressPackagesTitle",
-                        FormatResourceString("RestoreProgressPackageAfterCompletion", packageId, packageVersion));
-                    return false;
-                }
-
-                try
-                {
-                    _packageReporter ??= _buildEngine.EngineServices.CreateTaskProgressReporter(
-                        GetResourceString("RestoreProgressPackagesTitle"),
-                        TaskProgressUnit.Items);
-                    _packageStatus = GetPackageProgressStatus();
-                }
-                catch (Exception exception)
-                {
-                    StopPackageOperation(exception.ToString());
-                    return false;
-                }
-            }
-
-            ReportPackageProgress();
+            EnsurePackageReporter()?.AddToTotal(1);
             return true;
         }
 
@@ -148,34 +106,15 @@ namespace NuGet.Build.Tasks
             var identity = new PackageProgressIdentity(packageId, packageVersion);
             if (!_packageProgress.TryUpdate(identity, PackageProgressState.Completed, PackageProgressState.Started))
             {
-                StopPackageOperation(FormatResourceString("RestoreProgressPackageMismatch", packageId, packageVersion));
+                // A start/complete mismatch is a NuGet-side bookkeeping bug, not a reporter failure.
+                // Log it and continue; do not count it, and do not disturb the rest of the operation.
+                _log?.LogVerbose(FormatResourceString("RestoreProgressPackageMismatch", packageId, packageVersion));
                 return;
             }
 
             _inFlightPackages.TryRemove(identity, out _);
-
             Interlocked.Increment(ref _packagesCompleted);
-
-            lock (_packageLock)
-            {
-                if (_packageOperationFinished)
-                {
-                    return;
-                }
-
-                try
-                {
-                    _packageStatus = GetPackageProgressStatus();
-                }
-                catch (Exception exception)
-                {
-                    StopPackageOperation(exception.ToString());
-                    return;
-                }
-            }
-
-            ReportPackageProgress();
-            ReportOverallProgress();
+            Volatile.Read(ref _packageReporter)?.Increment();
             TryCompletePackageOperation();
         }
 
@@ -183,29 +122,6 @@ namespace NuGet.Build.Tasks
         {
             Interlocked.Decrement(ref _projectsInstalling);
             Interlocked.Increment(ref _projectsResolving);
-
-            if (Volatile.Read(ref _packagesCompleted) >= Volatile.Read(ref _packagesTotal) &&
-                Volatile.Read(ref _projectsRemainingResolution) > 0)
-            {
-                lock (_packageLock)
-                {
-                    if (!_packageOperationFinished)
-                    {
-                        try
-                        {
-                            _packageStatus = GetResourceString("RestoreProgressWaitingForDependencies");
-                        }
-                        catch (Exception exception)
-                        {
-                            StopPackageOperation(exception.ToString());
-                        }
-                    }
-                }
-
-                ReportPackageProgress();
-            }
-
-            ReportOverallProgress();
             TryCompletePackageOperation();
         }
 
@@ -223,7 +139,6 @@ namespace NuGet.Build.Tasks
                 Interlocked.Increment(ref _projectsCommitting);
             }
 
-            ReportOverallProgress();
             TryCompletePackageOperation();
         }
 
@@ -242,10 +157,10 @@ namespace NuGet.Build.Tasks
             if (commitSucceeded)
             {
                 Interlocked.Increment(ref _completedProjects);
+                _overallReporter?.Increment();
                 Volatile.Write(ref _lastCompletedProject, Path.GetFileName(projectPath));
             }
 
-            ReportOverallProgress();
             TryCompletePackageOperation();
         }
 
@@ -259,266 +174,78 @@ namespace NuGet.Build.Tasks
 
         internal void Complete()
         {
-            CompletePackageOperation();
-            SetOverallOutcome(static reporter => reporter.Complete());
+            Volatile.Read(ref _packageReporter)?.Complete();
+            _overallReporter?.Complete();
         }
 
         internal void Cancel()
         {
-            FinishPackageOperation(static reporter => reporter.Cancel(Strings.RestoreCanceled));
-            SetOverallOutcome(static reporter => reporter.Cancel(Strings.RestoreCanceled));
+            Volatile.Read(ref _packageReporter)?.Cancel();
+            _overallReporter?.Cancel();
         }
 
         internal void Fail()
         {
-            FinishPackageOperation(static reporter => reporter.Fail());
-            SetOverallOutcome(static reporter => reporter.Fail());
+            Volatile.Read(ref _packageReporter)?.Fail();
+            _overallReporter?.Fail();
+        }
+
+        /// <summary>
+        /// Ends both operations with the outcome that matches how the task finished.
+        /// </summary>
+        internal void Finish(bool succeeded, CancellationToken cancellationToken)
+        {
+            Volatile.Read(ref _packageReporter)?.Finish(succeeded, cancellationToken);
+            _overallReporter?.Finish(succeeded, cancellationToken);
         }
 
         public void Dispose()
         {
-            ITaskProgressReporter? packageReporter;
-            lock (_packageLock)
-            {
-                packageReporter = _packageReporter;
-                _packageReporter = null;
-                _packageOperationFinished = true;
-            }
-
-            ITaskProgressReporter? overallReporter;
-            lock (_overallLock)
-            {
-                overallReporter = _overallReporter;
-                _overallReporter = null;
-                _overallOutcomeSet = true;
-            }
-
-            TryDispose(packageReporter);
-            TryDispose(overallReporter);
+            Volatile.Read(ref _packageReporter)?.Dispose();
+            _overallReporter?.Dispose();
         }
 
+        /// <summary>
+        /// Creates the package reporter on first use. Multiple projects can reach this concurrently for
+        /// the very first package candidate in the restore, so creation is guarded; every later call is
+        /// a lock-free read.
+        /// </summary>
+        private ITaskProgressReporter? EnsurePackageReporter()
+        {
+            ITaskProgressReporter? reporter = Volatile.Read(ref _packageReporter);
+            if (reporter is not null || _buildEngine is null)
+            {
+                return reporter;
+            }
+
+            lock (_packageReporterGate)
+            {
+                reporter = Volatile.Read(ref _packageReporter);
+                if (reporter is null)
+                {
+                    reporter = _buildEngine.EngineServices.CreateTaskProgressReporter(
+                        GetResourceString("RestoreProgressPackagesTitle"),
+                        TaskProgressUnit.Items);
+                    reporter?.SetStatusProvider(GetPackageProgressStatus);
+                    Volatile.Write(ref _packageReporter, reporter);
+                }
+            }
+
+            return reporter;
+        }
+
+        /// <summary>
+        /// Finishes the package operation as soon as no project can produce another install batch: every
+        /// project is past graph resolution, and every known package has finished its first install check.
+        /// A later, unexpected batch cannot reopen a finished operation; the engine drops updates to a
+        /// closed reporter, and the batch is still visible through the overall phase counts.
+        /// </summary>
         private void TryCompletePackageOperation()
         {
             if (Volatile.Read(ref _projectsRemainingResolution) == 0 &&
                 Volatile.Read(ref _packagesCompleted) >= Volatile.Read(ref _packagesTotal))
             {
-                CompletePackageOperation();
-            }
-        }
-
-        private void CompletePackageOperation()
-        {
-            lock (_packageLock)
-            {
-                if (_packageReporter is null || _packageOperationFinished)
-                {
-                    return;
-                }
-
-                try
-                {
-                    _packageStatus = GetPackageProgressStatus();
-                }
-                catch (Exception exception)
-                {
-                    StopPackageOperation(exception.ToString());
-                    return;
-                }
-
-                ReportPackageProgress();
-                FinishPackageOperation(static reporter => reporter.Complete());
-            }
-        }
-
-        private void FinishPackageOperation(Action<ITaskProgressReporter> finish)
-        {
-            ITaskProgressReporter? reporter;
-            lock (_packageLock)
-            {
-                if (_packageReporter is null || _packageOperationFinished)
-                {
-                    return;
-                }
-
-                reporter = _packageReporter;
-                _packageReporter = null;
-                _packageOperationFinished = true;
-            }
-
-            try
-            {
-                finish(reporter);
-            }
-            catch (Exception exception)
-            {
-                LogReportingStopped("RestoreProgressPackagesTitle", exception.ToString());
-            }
-            finally
-            {
-                TryDispose(reporter);
-            }
-        }
-
-        private void StopPackageOperation(string reason)
-        {
-            ITaskProgressReporter? reporter;
-            lock (_packageLock)
-            {
-                if (_packageOperationFinished)
-                {
-                    return;
-                }
-
-                reporter = _packageReporter;
-                _packageReporter = null;
-                _packageOperationFinished = true;
-            }
-
-            TryDispose(reporter);
-            LogReportingStopped("RestoreProgressPackagesTitle", reason);
-        }
-
-        private void StopOverallOperation(string reason)
-        {
-            ITaskProgressReporter? reporter;
-            lock (_overallLock)
-            {
-                if (_overallOutcomeSet)
-                {
-                    return;
-                }
-
-                reporter = _overallReporter;
-                _overallReporter = null;
-                _overallOutcomeSet = true;
-            }
-
-            TryDispose(reporter);
-            LogReportingStopped("RestoreProgressTitle", reason);
-        }
-
-        private void ReportOverallProgress()
-        {
-            lock (_overallLock)
-            {
-                if (_overallReporter is null || _overallOutcomeSet)
-                {
-                    return;
-                }
-
-                try
-                {
-                    int completed = Math.Max(
-                        _lastReportedProjectsCompleted,
-                        Volatile.Read(ref _completedProjects));
-                    int totalProjects = Volatile.Read(ref _totalProjects);
-                    long? total = totalProjects > 0 ? totalProjects : null;
-                    int reportedTotal = totalProjects > 0 ? totalProjects : 0;
-                    string status = GetOverallStatus();
-                    bool countsChanged = completed != _lastReportedProjectsCompleted ||
-                        reportedTotal != _lastReportedProjectsTotal;
-                    if (!countsChanged && string.Equals(status, _lastReportedOverallStatus, StringComparison.Ordinal))
-                    {
-                        return;
-                    }
-
-                    _overallReporter.Report(new TaskProgressUpdate(completed, total, status));
-                    _lastReportedProjectsCompleted = completed;
-                    _lastReportedProjectsTotal = reportedTotal;
-                    _lastReportedOverallStatus = status;
-                }
-                catch (Exception exception)
-                {
-                    StopOverallOperation(exception.ToString());
-                }
-            }
-        }
-
-        private void ReportPackageProgress()
-        {
-            lock (_packageLock)
-            {
-                if (_packageReporter is null || _packageOperationFinished)
-                {
-                    return;
-                }
-
-                try
-                {
-                    long completed = Math.Max(
-                        _lastReportedPackagesCompleted,
-                        Volatile.Read(ref _packagesCompleted));
-                    long total = Volatile.Read(ref _packagesTotal);
-                    string status = _packageStatus;
-                    bool countsChanged = completed != _lastReportedPackagesCompleted ||
-                        total != _lastReportedPackagesTotal;
-                    if (!countsChanged && string.Equals(status, _lastReportedPackageStatus, StringComparison.Ordinal))
-                    {
-                        return;
-                    }
-
-                    _packageReporter.Report(new TaskProgressUpdate(completed, total, status));
-                    _lastReportedPackagesCompleted = completed;
-                    _lastReportedPackagesTotal = total;
-                    _lastReportedPackageStatus = status;
-                }
-                catch (Exception exception)
-                {
-                    StopPackageOperation(exception.ToString());
-                }
-            }
-        }
-
-        private void SetOverallOutcome(Action<ITaskProgressReporter> finish)
-        {
-            ReportOverallProgress();
-
-            ITaskProgressReporter? reporter;
-            lock (_overallLock)
-            {
-                if (_overallReporter is null || _overallOutcomeSet)
-                {
-                    return;
-                }
-
-                reporter = _overallReporter;
-                _overallOutcomeSet = true;
-            }
-
-            try
-            {
-                finish(reporter);
-            }
-            catch (Exception exception)
-            {
-                LogReportingStopped("RestoreProgressTitle", exception.ToString());
-            }
-        }
-
-        private void LogReportingStopped(string titleResourceName, string reason)
-        {
-            try
-            {
-                _log?.LogVerbose(FormatResourceString(
-                    "RestoreProgressReportingStopped",
-                    GetResourceString(titleResourceName),
-                    reason));
-            }
-            catch (Exception)
-            {
-                // Logging can fail after the task has returned. Progress reporting must not fail the restore.
-            }
-        }
-
-        private static void TryDispose(ITaskProgressReporter? reporter)
-        {
-            try
-            {
-                reporter?.Dispose();
-            }
-            catch (Exception)
-            {
-                // Disposing the reporter abandons the operation. Progress reporting must not fail the restore.
+                Volatile.Read(ref _packageReporter)?.Complete();
             }
         }
 
@@ -527,7 +254,7 @@ namespace NuGet.Build.Tasks
             return string.Format(CultureInfo.CurrentCulture, GetResourceString(name), args);
         }
 
-        private string GetOverallStatus()
+        private string? GetOverallStatus()
         {
             var phases = new List<string>(4);
             AddPhaseStatus(phases, "RestoreProgressPhaseResolving", Volatile.Read(ref _projectsResolving));
@@ -549,7 +276,7 @@ namespace NuGet.Build.Tasks
                     lastCompletedProject);
         }
 
-        private string GetPackageProgressStatus()
+        private string? GetPackageProgressStatus()
         {
             // Show the longest-running install, because that is the package that holds the line still.
             InFlightPackage? oldest = null;
