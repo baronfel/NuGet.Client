@@ -84,7 +84,7 @@ namespace NuGet.Build.Tasks
 
         public bool TryStartPackageInstall(string packageId, string packageVersion)
         {
-            if (_buildEngine is null)
+            if (_overallReporter is null)
             {
                 return false;
             }
@@ -206,14 +206,16 @@ namespace NuGet.Build.Tasks
         }
 
         /// <summary>
-        /// Creates the package reporter on first use. Multiple projects can reach this concurrently for
-        /// the very first package candidate in the restore, so creation is guarded; every later call is
-        /// a lock-free read.
+        /// Creates the package reporter on first use, nested under the overall operation so a live
+        /// display shows it indented beneath "Restoring projects" and keeps it visible (<see cref="TaskProgressNestedRetention.Persist"/>)
+        /// once installs finish while projects are still resolving. Multiple projects can reach this
+        /// concurrently for the very first package candidate in the restore, so creation is guarded;
+        /// every later call is a lock-free read.
         /// </summary>
         private ITaskProgressReporter? EnsurePackageReporter()
         {
             ITaskProgressReporter? reporter = Volatile.Read(ref _packageReporter);
-            if (reporter is not null || _buildEngine is null)
+            if (reporter is not null || _overallReporter is null)
             {
                 return reporter;
             }
@@ -223,10 +225,11 @@ namespace NuGet.Build.Tasks
                 reporter = Volatile.Read(ref _packageReporter);
                 if (reporter is null)
                 {
-                    reporter = _buildEngine.EngineServices.CreateTaskProgressReporter(
+                    reporter = _overallReporter.CreateNestedReporter(
                         GetResourceString("RestoreProgressPackagesTitle"),
-                        TaskProgressUnit.Items);
-                    reporter?.SetStatusProvider(GetPackageProgressStatus);
+                        TaskProgressUnit.Items,
+                        TaskProgressNestedRetention.Persist);
+                    reporter.SetStatusProvider(GetPackageProgressStatus);
                     Volatile.Write(ref _packageReporter, reporter);
                 }
             }

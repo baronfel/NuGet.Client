@@ -42,12 +42,13 @@ namespace NuGet.Build.Tasks.Test
                 reporter.Complete();
             }
 
-            RecordingProgressReporter packages = engine.Reporters.Single(r => r.Title == PackagesTitle);
+            RecordingProgressReporter restore = engine.Reporters.Single(r => r.Title == RestoreTitle);
+            RecordingProgressReporter packages = restore.NestedReporters.Single(r => r.Title == PackagesTitle);
+            Assert.Equal(TaskProgressNestedRetention.Persist, packages.Retention);
             Assert.Equal("Completed", packages.Outcome);
             Assert.Equal(2, packages.Updates.Last().Total);
             Assert.Equal(2, packages.Updates.Last().Completed);
 
-            RecordingProgressReporter restore = engine.Reporters.Single(r => r.Title == RestoreTitle);
             Assert.Equal("Completed", restore.Outcome);
             Assert.Equal(1, restore.Updates.Last().Completed);
             Assert.Equal(1, restore.Updates.Last().Total);
@@ -155,6 +156,7 @@ namespace NuGet.Build.Tasks.Test
         {
             private readonly object _gate = new();
             private readonly List<TaskProgressUpdate> _updates = new();
+            private readonly List<RecordingProgressReporter> _nestedReporters = new();
             private long _completed;
             private long? _total;
             private string? _explicitStatus;
@@ -169,6 +171,19 @@ namespace NuGet.Build.Tasks.Test
             public string Title { get; }
 
             public string? Outcome { get; private set; }
+
+            public TaskProgressNestedRetention? Retention { get; private set; }
+
+            public IReadOnlyList<RecordingProgressReporter> NestedReporters
+            {
+                get
+                {
+                    lock (_gate)
+                    {
+                        return _nestedReporters.ToList();
+                    }
+                }
+            }
 
             public IReadOnlyList<TaskProgressUpdate> Updates
             {
@@ -291,8 +306,30 @@ namespace NuGet.Build.Tasks.Test
 
             public void Dispose() => Finish("Abandoned");
 
+            public ITaskProgressReporter CreateNestedReporter(
+                string title,
+                TaskProgressUnit unit = TaskProgressUnit.Unspecified,
+                TaskProgressNestedRetention retention = TaskProgressNestedRetention.Remove)
+            {
+                lock (_gate)
+                {
+                    var nested = new RecordingProgressReporter(title) { Retention = retention };
+                    if (_terminal)
+                    {
+                        // Like the engine, a reporter that already ended hands out a reporter that
+                        // ignores every call, without recording it as a live child.
+                        nested.Dispose();
+                        return nested;
+                    }
+
+                    _nestedReporters.Add(nested);
+                    return nested;
+                }
+            }
+
             private void Finish(string outcome)
             {
+                RecordingProgressReporter[] nested;
                 lock (_gate)
                 {
                     if (_terminal)
@@ -302,6 +339,13 @@ namespace NuGet.Build.Tasks.Test
 
                     _terminal = true;
                     Outcome = outcome;
+                    nested = _nestedReporters.ToArray();
+                }
+
+                // Like the engine, any nested operation still active is abandoned when the parent ends.
+                foreach (RecordingProgressReporter reporter in nested)
+                {
+                    reporter.Dispose();
                 }
             }
 
