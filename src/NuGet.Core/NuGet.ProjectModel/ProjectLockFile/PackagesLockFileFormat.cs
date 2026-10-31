@@ -70,6 +70,10 @@ namespace NuGet.ProjectModel
         /// <param name="lockFileContent">The complete package lock file content.</param>
         /// <param name="path">The path to use in diagnostics.</param>
         /// <returns>The parsed package lock file.</returns>
+        /// <remarks>
+        /// The root object's first property must be <c>version</c>.
+        /// A parsing failure returns a lock file with <see cref="PackagesLockFile.Version"/> set to <see cref="int.MinValue"/>.
+        /// </remarks>
         [Obsolete("Use Read(Stream, ILogger, string) instead to avoid keeping the entire lock file in memory.")]
         public static PackagesLockFile Parse(string lockFileContent, string path)
         {
@@ -88,6 +92,10 @@ namespace NuGet.ProjectModel
         /// <param name="path">The path to use in diagnostics.</param>
         /// <returns>The parsed package lock file.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="log"/> is <see langword="null"/>.</exception>
+        /// <remarks>
+        /// The root object's first property must be <c>version</c>.
+        /// Parsing failures are logged and return a lock file with <see cref="PackagesLockFile.Version"/> set to <see cref="int.MinValue"/>.
+        /// </remarks>
         [Obsolete("Use Read(Stream, ILogger, string) instead to avoid keeping the entire lock file in memory.")]
         public static PackagesLockFile Parse(string lockFileContent, ILogger log, string path)
         {
@@ -97,11 +105,37 @@ namespace NuGet.ProjectModel
             }
         }
 
+        /// <summary>
+        /// Reads a UTF-8 package lock file and closes the file before returning.
+        /// </summary>
+        /// <param name="filePath">The package lock file path.</param>
+        /// <returns>
+        /// The parsed package lock file, or a lock file with <see cref="PackagesLockFile.Version"/> set to
+        /// <see cref="int.MinValue"/> if parsing fails.
+        /// </returns>
+        /// <remarks>
+        /// The root object's first property must be <c>version</c>.
+        /// File-opening failures propagate to the caller.
+        /// </remarks>
         public static PackagesLockFile Read(string filePath)
         {
             return Read(filePath, NullLogger.Instance);
         }
 
+        /// <summary>
+        /// Reads a UTF-8 package lock file, logs parsing failures, and closes the file before returning.
+        /// </summary>
+        /// <param name="filePath">The package lock file path, also used in diagnostics.</param>
+        /// <param name="log">The logger for read diagnostics.</param>
+        /// <returns>
+        /// The parsed package lock file, or a lock file with <see cref="PackagesLockFile.Version"/> set to
+        /// <see cref="int.MinValue"/> if parsing fails.
+        /// </returns>
+        /// <exception cref="ArgumentNullException"><paramref name="log"/> is <see langword="null"/>.</exception>
+        /// <remarks>
+        /// The root object's first property must be <c>version</c>.
+        /// File-opening failures propagate to the caller.
+        /// </remarks>
         public static PackagesLockFile Read(string filePath, ILogger log)
         {
             using (var stream = File.OpenRead(filePath))
@@ -122,6 +156,7 @@ namespace NuGet.ProjectModel
         /// <returns>The parsed package lock file.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="log"/> is <see langword="null"/>.</exception>
         /// <remarks>
+        /// The root object's first property must be <c>version</c>.
         /// The method does not take ownership of <paramref name="stream"/> when argument validation fails before reading starts.
         /// </remarks>
         public static PackagesLockFile Read(Stream stream, ILogger log, string path)
@@ -165,6 +200,7 @@ namespace NuGet.ProjectModel
         /// <returns>The parsed package lock file.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="log"/> is <see langword="null"/>.</exception>
         /// <remarks>
+        /// Unlike the UTF-8 stream reader, this compatibility reader does not require <c>version</c> to be the first root property.
         /// The method does not take ownership of <paramref name="reader"/> when argument validation fails before reading starts.
         /// </remarks>
         [Obsolete("Use Read(Stream, ILogger, string) instead.")]
@@ -261,6 +297,12 @@ namespace NuGet.ProjectModel
         /// </remarks>
         /// <param name="lockFile">The package lock file to render.</param>
         /// <returns>The rendered package lock file.</returns>
+        /// <exception cref="ArgumentNullException">
+        /// A target, package, dependency, or JSON property name is <see langword="null"/>.
+        /// </exception>
+        /// <exception cref="ArgumentException">
+        /// The model produces duplicate JSON property names within the same object.
+        /// </exception>
         [Obsolete("Use Write(Stream, PackagesLockFile) instead to avoid buffering the entire lock file in memory.")]
         public static string Render(PackagesLockFile lockFile)
         {
@@ -283,10 +325,16 @@ namespace NuGet.ProjectModel
         }
 
         /// <summary>
-        /// Creates the parent directory and replaces an existing destination file.
+        /// Writes a UTF-8 package lock file, creating the parent directory and creating or replacing the destination file.
         /// </summary>
         /// <param name="filePath">The destination file path.</param>
         /// <param name="lockFile">The package lock file to write.</param>
+        /// <exception cref="ArgumentNullException">
+        /// A target, package, dependency, or JSON property name is <see langword="null"/>.
+        /// </exception>
+        /// <exception cref="ArgumentException">
+        /// The model produces duplicate JSON property names within the same object.
+        /// </exception>
         /// <remarks>
         /// Writes to a temporary file before replacing the destination.
         /// Validation failures remove the temporary file and leave the destination unchanged.
@@ -309,11 +357,22 @@ namespace NuGet.ProjectModel
         }
 
         /// <summary>
-        /// Writes a package lock file and disposes the destination stream before returning.
+        /// Writes a UTF-8 package lock file and disposes the destination stream before returning.
         /// </summary>
         /// <param name="stream">The destination stream. This method takes ownership of the stream.</param>
         /// <param name="lockFile">The package lock file to write.</param>
-        /// <remarks>Writing failures can leave partial output in the destination stream.</remarks>
+        /// <exception cref="ArgumentNullException">
+        /// A target, package, dependency, or JSON property name is <see langword="null"/>.
+        /// </exception>
+        /// <exception cref="ArgumentException">
+        /// The model produces duplicate JSON property names within the same object.
+        /// </exception>
+        /// <remarks>
+        /// Uses pooled buffering to write incrementally without buffering the complete document.
+        /// Validates JSON property names during writing.
+        /// Writing failures can leave partial output in the destination stream.
+        /// The destination stream is disposed even if writing fails.
+        /// </remarks>
         public static void Write(Stream stream, PackagesLockFile lockFile)
         {
             using (stream)
@@ -323,10 +382,16 @@ namespace NuGet.ProjectModel
         }
 
         /// <summary>
-        /// Writes a package lock file and disposes the destination text writer.
+        /// Uses the legacy Newtonsoft.Json writer to write a package lock file and dispose the destination text writer.
         /// </summary>
-        /// <param name="textWriter">The destination text writer.</param>
+        /// <param name="textWriter">The destination text writer. This method takes ownership of the writer.</param>
         /// <param name="lockFile">The package lock file to write.</param>
+        /// <remarks>
+        /// Builds the complete JSON object model in memory before writing.
+        /// Preserves Newtonsoft.Json escaping behavior, which can differ from the UTF-8 stream writer.
+        /// Writing failures can leave partial output in the destination writer.
+        /// The destination writer is disposed even if serialization fails after the JSON writer is created.
+        /// </remarks>
 #if NET5_0_OR_GREATER
         [UnconditionalSuppressMessage("AOT", "IL2026", Justification = "WriteTo without converters is safe. See https://github.com/JamesNK/Newtonsoft.Json/blob/13.0.4/Src/Newtonsoft.Json/Linq/JToken.cs")]
         [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "WriteTo without converters is safe. See https://github.com/JamesNK/Newtonsoft.Json/blob/13.0.4/Src/Newtonsoft.Json/Linq/JToken.cs")]
