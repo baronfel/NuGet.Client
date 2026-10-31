@@ -99,11 +99,34 @@ namespace NuGet.ProjectModel.Test
         }
 
         [Theory]
+        [InlineData("""{}""")]
+        [InlineData("""{"dependencies":{}}""")]
         [InlineData("""{"dependencies":{},"version":1}""")]
         [InlineData("""{"net8.0":{"framework":"net8.0","dependencies":{}},"version":3}""")]
         public void PackagesLockFileFormat_ReadVersionNotFirst_Throws(string content)
         {
-            Assert.Throws<JsonException>(() => ParseWithSystemTextJson(content));
+            JsonException exception = Assert.Throws<JsonException>(() => ParseWithSystemTextJson(content));
+
+            Assert.Equal(Strings.PackagesLockFile_ExpectedVersionFirst, exception.Message);
+        }
+
+        [Theory]
+        [InlineData("""{}""")]
+        [InlineData("""{"dependencies":{}}""")]
+        [InlineData("""{"dependencies":{},"version":1}""")]
+        [InlineData("""{"net8.0":{"framework":"net8.0","dependencies":{}},"version":3}""")]
+        public void PackagesLockFileFormat_ReadVersionNotFirst_LogsDiagnosticAndDisposesStream(string content)
+        {
+            var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+            var logger = new TestLogger();
+
+            PackagesLockFile lockFile = PackagesLockFileFormat.Read(stream, logger, "invalid-version.lock.json");
+
+            Assert.Equal(int.MinValue, lockFile.Version);
+            Assert.False(stream.CanRead);
+            string message = Assert.Single(logger.InformationMessages);
+            Assert.Contains("invalid-version.lock.json", message);
+            Assert.Contains(Strings.PackagesLockFile_ExpectedVersionFirst, message);
         }
 
         [Theory]

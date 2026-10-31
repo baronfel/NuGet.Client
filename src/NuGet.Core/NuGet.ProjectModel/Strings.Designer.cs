@@ -19,7 +19,7 @@ namespace NuGet.ProjectModel {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class Strings {
@@ -183,6 +183,15 @@ namespace NuGet.ProjectModel {
         internal static string PackagesLockFile_DuplicatePropertyName {
             get {
                 return ResourceManager.GetString("PackagesLockFile_DuplicatePropertyName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Expected &apos;version&apos; as the first property in the package lock file..
+        /// </summary>
+        internal static string PackagesLockFile_ExpectedVersionFirst {
+            get {
+                return ResourceManager.GetString("PackagesLockFile_ExpectedVersionFirst", resourceCulture);
             }
         }
 

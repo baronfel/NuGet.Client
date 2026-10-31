@@ -168,6 +168,10 @@
   <data name="PackagesLockFile_IncompatibleLockFileVersion" xml:space="preserve">
     <value>Version specified in the packages.lock.json file is incompatible. Current tooling supports version {0} and previous formats.</value>
   </data>
+  <data name="PackagesLockFile_ExpectedVersionFirst" xml:space="preserve">
+    <value>Expected 'version' as the first property in the package lock file.</value>
+    <comment>{Locked="version"} 'version' is a JSON property name.</comment>
+  </data>
   <data name="PackagesLockFile_MismatchedTargetFrameworks" xml:space="preserve">
     <value>The project target frameworks are different than the lock file's target frameworks. Lock file target frameworks: {0}. Project target frameworks {1}.</value>
     <comment>0 - Semicolon delimited list of lock file target frameworks, 1 - semicolon delimited list of lock file target frameworks</comment>

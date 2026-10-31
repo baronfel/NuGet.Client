@@ -126,11 +126,7 @@ namespace NuGet.ProjectModel
         /// </remarks>
         public static PackagesLockFile Read(Stream stream, ILogger log, string path)
         {
-#if NET6_0_OR_GREATER
-            ArgumentNullException.ThrowIfNull(log);
-#else
             if (log == null) throw new ArgumentNullException(nameof(log));
-#endif
 
             try
             {
@@ -174,11 +170,7 @@ namespace NuGet.ProjectModel
         [Obsolete("Use Read(Stream, ILogger, string) instead.")]
         public static PackagesLockFile Read(TextReader reader, ILogger log, string path)
         {
-#if NET6_0_OR_GREATER
-            ArgumentNullException.ThrowIfNull(log);
-#else
             if (log == null) throw new ArgumentNullException(nameof(log));
-#endif
 
             try
             {
@@ -543,7 +535,7 @@ namespace NuGet.ProjectModel
                 || reader.TokenType != JsonTokenType.PropertyName
                 || !reader.ValueTextEquals(VersionPropertyUtf8))
             {
-                throw new JsonException();
+                throw new JsonException(Strings.PackagesLockFile_ExpectedVersionFirst);
             }
 
             ReadValue(ref reader);
