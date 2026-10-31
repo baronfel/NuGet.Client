@@ -4,6 +4,9 @@
 #nullable disable
 
 using System;
+#if NET5_0_OR_GREATER
+using System.Buffers;
+#endif
 using System.Collections.Generic;
 #if NET5_0_OR_GREATER
 using System.Diagnostics.CodeAnalysis;
@@ -38,12 +41,19 @@ namespace NuGet.ProjectModel
         public static readonly string LockFileName = "packages.lock.json";
 
         private const string VersionProperty = "version";
+
+        // These string constants support the Newtonsoft.Json compatibility paths.
+        // Remove them when those paths are removed.
         private const string ResolvedProperty = "resolved";
         private const string RequestedProperty = "requested";
         private const string ContentHashProperty = "contentHash";
         private const string DependenciesProperty = "dependencies";
         private const string TypeProperty = "type";
         private const string FrameworkProperty = "framework";
+        private static readonly JsonWriterOptions WriterOptions = new()
+        {
+            Indented = true
+        };
 
         private static ReadOnlySpan<byte> VersionPropertyUtf8 => "version"u8;
         private static ReadOnlySpan<byte> ResolvedPropertyUtf8 => "resolved"u8;
@@ -250,13 +260,34 @@ namespace NuGet.ProjectModel
             }
         }
 
+        /// <summary>
+        /// Renders the complete package lock file as a string.
+        /// </summary>
+        /// <remarks>
+        /// This method buffers the complete UTF-8 output before creating the returned UTF-16 string.
+        /// Write directly to a stream to avoid both whole-file allocations.
+        /// </remarks>
+        /// <param name="lockFile">The package lock file to render.</param>
+        /// <returns>The rendered package lock file.</returns>
+        [Obsolete("Use Write(Stream, PackagesLockFile) instead to avoid buffering the entire lock file in memory.")]
         public static string Render(PackagesLockFile lockFile)
         {
-            using (var writer = new StringWriter())
+#if NET5_0_OR_GREATER
+            var buffer = new ArrayBufferWriter<byte>();
+            using (var jsonWriter = new Utf8JsonWriter(buffer, WriterOptions))
             {
-                Write(writer, lockFile);
-                return writer.ToString();
+                WriteLockFile(jsonWriter, lockFile);
             }
+
+            return Encoding.UTF8.GetString(buffer.WrittenSpan);
+#else
+            using (var stream = new MemoryStream())
+            {
+                WriteToStream(stream, lockFile);
+
+                return Encoding.UTF8.GetString(stream.GetBuffer(), 0, checked((int)stream.Length));
+            }
+#endif
         }
 
         /// <summary>
@@ -264,16 +295,25 @@ namespace NuGet.ProjectModel
         /// </summary>
         /// <param name="filePath">The destination file path.</param>
         /// <param name="lockFile">The package lock file to write.</param>
+        /// <remarks>
+        /// Writes to a temporary file before replacing the destination.
+        /// Validation failures remove the temporary file and leave the destination unchanged.
+        /// </remarks>
         public static void Write(string filePath, PackagesLockFile lockFile)
         {
             // Create the directory if it does not exist
             var fileInfo = new FileInfo(filePath);
             fileInfo.Directory.Create();
 
-            using (var stream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
-            {
-                Write(stream, lockFile);
-            }
+            FileUtility.Replace(
+                outputPath =>
+                {
+                    using (var stream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        Write(stream, lockFile);
+                    }
+                },
+                fileInfo.FullName);
         }
 
         /// <summary>
@@ -281,20 +321,17 @@ namespace NuGet.ProjectModel
         /// </summary>
         /// <param name="stream">The destination stream. This method takes ownership of the stream.</param>
         /// <param name="lockFile">The package lock file to write.</param>
+        /// <remarks>Writing failures can leave partial output in the destination stream.</remarks>
         public static void Write(Stream stream, PackagesLockFile lockFile)
         {
-#if NET5_0_OR_GREATER
-            using (var textWriter = new StreamWriter(stream))
-#else
-            using (var textWriter = new NoAllocNewLineStreamWriter(stream))
-#endif
+            using (stream)
             {
-                Write(textWriter, lockFile);
+                WriteToStream(stream, lockFile);
             }
         }
 
         /// <summary>
-        /// Writes a package lock file without disposing the destination text writer.
+        /// Writes a package lock file and disposes the destination text writer.
         /// </summary>
         /// <param name="textWriter">The destination text writer.</param>
         /// <param name="lockFile">The package lock file to write.</param>
@@ -302,6 +339,7 @@ namespace NuGet.ProjectModel
         [UnconditionalSuppressMessage("AOT", "IL2026", Justification = "WriteTo without converters is safe. See https://github.com/JamesNK/Newtonsoft.Json/blob/13.0.4/Src/Newtonsoft.Json/Linq/JToken.cs")]
         [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "WriteTo without converters is safe. See https://github.com/JamesNK/Newtonsoft.Json/blob/13.0.4/Src/Newtonsoft.Json/Linq/JToken.cs")]
 #endif
+        [Obsolete("Use Write(Stream, PackagesLockFile) instead to avoid buffering the entire lock file in memory.")]
         public static void Write(TextWriter textWriter, PackagesLockFile lockFile)
         {
             using (var jsonWriter = new JsonTextWriter(textWriter))
@@ -310,6 +348,17 @@ namespace NuGet.ProjectModel
 
                 var json = WriteLockFile(lockFile);
                 json.WriteTo(jsonWriter, Array.Empty<JsonConverter>());
+            }
+        }
+
+        private static void WriteToStream(Stream stream, PackagesLockFile lockFile)
+        {
+            using (var bufferWriter = new PooledStreamBufferWriter(stream))
+            using (var jsonWriter = new Utf8JsonWriter(bufferWriter, WriterOptions))
+            {
+                WriteLockFile(jsonWriter, lockFile);
+                jsonWriter.Flush();
+                bufferWriter.Flush();
             }
         }
 
@@ -883,5 +932,204 @@ namespace NuGet.ProjectModel
                 throw new JsonException();
             }
         }
+        private static void WriteLockFile(Utf8JsonWriter writer, PackagesLockFile lockFile)
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber(VersionPropertyUtf8, lockFile.Version);
+
+            bool useAliases = lockFile.Version >= AliasedVersion;
+            var targetNames = new HashSet<string>(StringComparer.Ordinal);
+            if (useAliases)
+            {
+                targetNames.Add(VersionProperty);
+            }
+            else
+            {
+                // V1 and V2 format: write targets under dependencies property
+                writer.WritePropertyName(DependenciesPropertyUtf8);
+                writer.WriteStartObject();
+            }
+
+            foreach (PackagesLockFileTarget target in lockFile.Targets)
+            {
+                if (target is null)
+                {
+                    throw CreateNullPropertyNameException();
+                }
+
+                string targetName = target.Name;
+                AddPropertyName(targetNames, targetName);
+                writer.WritePropertyName(targetName);
+                if (useAliases)
+                {
+                    WriteTargetV3(writer, target);
+                }
+                else
+                {
+                    WriteTargetDependencies(writer, target.Dependencies);
+                }
+            }
+
+            if (!useAliases)
+            {
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndObject();
+        }
+
+        private static void WriteTargetV3(Utf8JsonWriter writer, PackagesLockFileTarget target)
+        {
+            writer.WriteStartObject();
+            writer.WriteString(FrameworkPropertyUtf8, target.TargetFramework.ToString());
+            writer.WritePropertyName(DependenciesPropertyUtf8);
+            WriteTargetDependencies(writer, target.Dependencies);
+            writer.WriteEndObject();
+        }
+
+        private static void WriteTargetDependencies(Utf8JsonWriter writer, IList<LockFileDependency> dependencies)
+        {
+            writer.WriteStartObject();
+            var packageIds = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (LockFileDependency dependency in dependencies)
+            {
+                if (dependency is null)
+                {
+                    throw CreateNullPropertyNameException();
+                }
+
+                AddPropertyName(packageIds, dependency.Id);
+                WriteTargetDependency(writer, dependency);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        private static void WriteTargetDependency(Utf8JsonWriter writer, LockFileDependency dependency)
+        {
+            writer.WritePropertyName(dependency.Id);
+            writer.WriteStartObject();
+            WriteDependencyType(writer, dependency.Type);
+
+            string? requestedVersion = GetRequestedVersion(dependency);
+            if (requestedVersion != null)
+            {
+                writer.WriteString(RequestedPropertyUtf8, requestedVersion);
+            }
+
+            string? resolvedVersion = GetResolvedVersion(dependency);
+            if (resolvedVersion != null)
+            {
+                writer.WriteString(ResolvedPropertyUtf8, resolvedVersion);
+            }
+
+            if (dependency.ContentHash != null)
+            {
+                writer.WriteString(ContentHashPropertyUtf8, dependency.ContentHash);
+            }
+
+            if (dependency.Dependencies?.Count > 0)
+            {
+                IEnumerable<PackageDependency> orderedDependencies = dependency.Dependencies.OrderBy(
+                    dependency => dependency?.Id,
+                    StringComparer.Ordinal);
+
+                writer.WritePropertyName(DependenciesPropertyUtf8);
+                writer.WriteStartObject();
+                var dependencyIds = new HashSet<string>(StringComparer.Ordinal);
+
+                foreach (PackageDependency packageDependency in orderedDependencies)
+                {
+                    if (packageDependency is null)
+                    {
+                        throw CreateNullPropertyNameException();
+                    }
+
+                    AddPropertyName(dependencyIds, packageDependency.Id);
+                    writer.WritePropertyName(packageDependency.Id);
+                    string? versionRange = GetDependencyVersionRange(dependency, packageDependency);
+
+                    if (versionRange == null)
+                    {
+                        writer.WriteNullValue();
+                    }
+                    else
+                    {
+                        writer.WriteStringValue(versionRange);
+                    }
+                }
+
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndObject();
+        }
+
+        private static void WriteDependencyType(Utf8JsonWriter writer, PackageDependencyType dependencyType)
+        {
+            writer.WritePropertyName(TypePropertyUtf8);
+
+            switch (dependencyType)
+            {
+                case PackageDependencyType.Direct:
+                    writer.WriteStringValue("Direct"u8);
+                    break;
+                case PackageDependencyType.Transitive:
+                    writer.WriteStringValue("Transitive"u8);
+                    break;
+                case PackageDependencyType.Project:
+                    writer.WriteStringValue("Project"u8);
+                    break;
+                case PackageDependencyType.CentralTransitive:
+                    writer.WriteStringValue("CentralTransitive"u8);
+                    break;
+                default:
+                    writer.WriteStringValue(dependencyType.ToString());
+                    break;
+            }
+        }
+
+        private static void AddPropertyName(HashSet<string> propertyNames, string? propertyName)
+        {
+            if (propertyName is null)
+            {
+                throw CreateNullPropertyNameException();
+            }
+
+            if (!propertyNames.Add(propertyName))
+            {
+                throw new ArgumentException(
+                    string.Format(CultureInfo.CurrentCulture, Strings.PackagesLockFile_DuplicatePropertyName, propertyName),
+                    nameof(propertyName));
+            }
+        }
+
+        private static ArgumentNullException CreateNullPropertyNameException()
+        {
+            return new ArgumentNullException(
+                "name",
+                Strings.PackagesLockFile_NullPropertyName);
+        }
+
+        private static string? GetRequestedVersion(LockFileDependency dependency)
+        {
+            return dependency.RequestedVersion?.ToNormalizedString();
+        }
+
+        private static string? GetResolvedVersion(LockFileDependency dependency)
+        {
+            return dependency.ResolvedVersion?.ToNormalizedString();
+        }
+
+        private static string? GetDependencyVersionRange(
+            LockFileDependency dependency,
+            PackageDependency packageDependency)
+        {
+            return dependency.Type == PackageDependencyType.Project
+                ? packageDependency.VersionRange?.ToString()
+                : packageDependency.VersionRange?.ToNonSnapshotRange().ToLegacyShortString();
+        }
+
     }
 }
